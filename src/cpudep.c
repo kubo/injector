@@ -30,7 +30,7 @@ int injector__setup_trampoline_code(const injector_t *injector, inst_t *trampoli
     switch (injector->e_machine) {
 #if defined(__x86_64__)
     case EM_X86_64:
-        /* trampoline code to call a syscall call */
+        /* trampoline code to call a system call */
         trampoline_code[0] = 0x0f;
         trampoline_code[1] = 0x05; /* 0f 05 : syscall     */
         trampoline_code[2] = 0xcc; /* cc    : int3        */
@@ -44,7 +44,7 @@ int injector__setup_trampoline_code(const injector_t *injector, inst_t *trampoli
 #endif
 #if defined(__x86_64__) || defined(__i386__)
     case EM_386:
-        /* trampoline code to call a syscall call */
+        /* trampoline code to call a system call */
         trampoline_code[0] = 0xcd;
         trampoline_code[1] = 0x80; /* cd 80 : int $80     */
         trampoline_code[2] = 0xcc; /* cc    : int3        */
@@ -59,14 +59,14 @@ int injector__setup_trampoline_code(const injector_t *injector, inst_t *trampoli
 #if defined(__arm__)
     case EM_ARM:
 #ifdef __thumb__
-        /* trampoline code to call a syscall call */
+        /* trampoline code to call a system call */
         trampoline_code[0] = 0xdf00; /* svc #0 */
         trampoline_code[1] = 0xbe00; /* bkpt #0 */
         /* trampoline code to call a function */
         trampoline_code[2] = 0x47a0; /* blx r4 */
         trampoline_code[3] = 0xbe00; /* bkpt #0 */
 #else
-        /* trampoline code to call a syscall call */
+        /* trampoline code to call a system call */
         trampoline_code[0] = 0xef000000; /* svc #0 */
         trampoline_code[1] = 0xe1200070; /* bkpt #0 */
         /* trampoline code to call a function */
@@ -77,7 +77,7 @@ int injector__setup_trampoline_code(const injector_t *injector, inst_t *trampoli
 #endif
 #if defined(__aarch64__)
     case EM_AARCH64:
-        /* trampoline code to call a syscall call */
+        /* trampoline code to call a system call */
         trampoline_code[0] = 0xd4000001; /* svc #0 */
         trampoline_code[1] = 0xd4200000; /* brk #0 */
         /* trampoline code to call a function */

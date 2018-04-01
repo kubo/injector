@@ -1,0 +1,6 @@
+*~
+*.o
+/cmd/injector
+/src/libinjector.a
+/src/libinjector.so
+

@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         printf("%s\n", injector_error());
         return 1;
     }
-    for (i = 2; i < argc; i++) {
+    for (i = optind; i < argc; i++) {
         char *libname = argv[i];
         if (injector_inject(injector, libname) == 0) {
             printf("\"%s\" successfully injected\n", libname);

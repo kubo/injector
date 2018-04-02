@@ -133,9 +133,9 @@ int injector__collect_libc_information(injector_t *injector)
     }
     injector->e_machine = ehdr.e_machine;
     injector->dlopen_addr = libc_addr + dlopen_offset;
-    injector->trampoline_addr = libc_addr + ehdr.e_entry;
+    injector->code_addr = libc_addr + ehdr.e_entry;
 #ifdef __thumb__
-    injector->trampoline_addr &= ~1;
+    injector->code_addr &= ~1;
 #endif
     rv = 0;
 cleanup:
@@ -219,10 +219,12 @@ static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)
         }
 #endif
         break;
-#ifdef __LP64__
     case ELFCLASS64:
-        break;
+#ifndef __LP64__
+        injector__set_errmsg("The target process is 64-bit.");
+        return -1;
 #endif
+        break;
     default:
         injector__set_errmsg("Invalid ELF class: 0x%x", ehdr->e_ident[EI_CLASS]);
         return -1;

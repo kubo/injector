@@ -22,87 +22,43 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <elf.h>
 #include "injector_internal.h"
 
-int injector__setup_trampoline_code(const injector_t *injector, inst_t *trampoline_code)
-{
-    switch (injector->e_machine) {
-#if defined(__x86_64__)
-    case EM_X86_64:
-        /* trampoline code to call a system call */
-        trampoline_code[0] = 0x0f;
-        trampoline_code[1] = 0x05; /* 0f 05 : syscall     */
-        trampoline_code[2] = 0xcc; /* cc    : int3        */
-        trampoline_code[3] = 0x90; /* 90    : nop         */
-        /* trampoline code to call a function */
-        trampoline_code[4] = 0xff;
-        trampoline_code[5] = 0xd0; /* ff d0 : callq *%rax */
-        trampoline_code[6] = 0xcc; /* cc    : int3        */
-        trampoline_code[7] = 0x90; /* 90    : nop         */
-        break;
+#ifdef __x86_64__
+#define eip rip
+#define ebp rbp
+#define esp rsp
+#define eax rax
+#define ebx rbx
+#define ecx rcx
+#define edx rdx
+#define esi rsi
+#define edi rdi
+#define ebp rbp
 #endif
-#if defined(__x86_64__) || defined(__i386__)
-    case EM_386:
-        /* trampoline code to call a system call */
-        trampoline_code[0] = 0xcd;
-        trampoline_code[1] = 0x80; /* cd 80 : int $80     */
-        trampoline_code[2] = 0xcc; /* cc    : int3        */
-        trampoline_code[3] = 0x90; /* 90    : nop         */
-        /* trampoline code to call a function */
-        trampoline_code[4] = 0xff;
-        trampoline_code[5] = 0xd0; /* ff d0 : call *%eax  */
-        trampoline_code[6] = 0xcc; /* cc    : int3        */
-        trampoline_code[7] = 0x90; /* 90    : nop         */
-        break;
-#endif
-#if defined(__arm__)
-    case EM_ARM:
-#ifdef __thumb__
-        /* trampoline code to call a system call */
-        trampoline_code[0] = 0xdf00; /* svc #0 */
-        trampoline_code[1] = 0xbe00; /* bkpt #0 */
-        /* trampoline code to call a function */
-        trampoline_code[2] = 0x47a0; /* blx r4 */
-        trampoline_code[3] = 0xbe00; /* bkpt #0 */
-#else
-        /* trampoline code to call a system call */
-        trampoline_code[0] = 0xef000000; /* svc #0 */
-        trampoline_code[1] = 0xe1200070; /* bkpt #0 */
-        /* trampoline code to call a function */
-        trampoline_code[2] = 0xe12fff34; /* blx r4 */
-        trampoline_code[3] = 0xe1200070; /* bkpt #0 */
-#endif
-        break;
-#endif
-#if defined(__aarch64__)
-    case EM_AARCH64:
-        /* trampoline code to call a system call */
-        trampoline_code[0] = 0xd4000001; /* svc #0 */
-        trampoline_code[1] = 0xd4200000; /* brk #0 */
-        /* trampoline code to call a function */
-        trampoline_code[2] = 0xd63f00c0; /* blr x6 */
-        trampoline_code[3] = 0xd4200000; /* brk #0 */
-        break;
-#endif
-    default:
-        injector__set_errmsg("Unsupported architecture: 0x%04x\n", injector->e_machine);
-        return -1;
-    }
-    return 0;
-}
+
+static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size);
 
 /*
+ * Call the specified system call in the target process.
+ *
  * The arguments after syscall_number must be integer types and
  * the size must not be greater than the size of long.
  */
 int injector__call_syscall(const injector_t *injector, long *retval, long syscall_number, ...)
 {
     struct user_regs_struct regs = injector->regs;
+    code_t code;
+    size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
 #ifdef __LP64__
     unsigned long long *reg_return;
+#elif defined(__i386__)
+    long *reg_return;
 #else
     unsigned long *reg_return;
 #endif
@@ -119,7 +75,14 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     switch (injector->e_machine) {
 #if defined(__x86_64__)
     case EM_X86_64:
-        regs.rip = injector->trampoline_addr + TRAMPOLINE_SYSCALL_OFFSET;
+        /* setup instructions */
+        code.u8[0] = 0x0f;
+        code.u8[1] = 0x05; /* 0f 05 : syscall */
+        code.u8[2] = 0xcc; /* cc    : int3    */
+        memset(&code.u8[3], 0x90, sizeof(long) - 3); /* fill the rests with `nop` */
+        code_size = sizeof(long);
+        /* setup registers */
+        regs.rip = injector->code_addr;
         regs.rax = syscall_number;
         regs.rdi = arg1;
         regs.rsi = arg2;
@@ -132,7 +95,14 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #endif
     default:
 #if defined(__x86_64__) || defined(__i386__)
-        regs.eip = injector->trampoline_addr + TRAMPOLINE_SYSCALL_OFFSET;
+        /* setup instructions */
+        code.u8[0] = 0xcd;
+        code.u8[1] = 0x80; /* cd 80 : int $80 */
+        code.u8[2] = 0xcc; /* cc    : int3    */
+        memset(&code.u8[3], 0x90, sizeof(long) - 3); /* fill the rests with `nop` */
+        code_size = sizeof(long);
+        /* setup registers */
+        regs.eip = injector->code_addr;
         regs.eax = syscall_number;
         regs.ebx = arg1;
         regs.ecx = arg2;
@@ -143,7 +113,18 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         reg_return = &regs.eax;
 #endif
 #if defined(__arm__)
-        regs.uregs[15] = injector->trampoline_addr + TRAMPOLINE_SYSCALL_OFFSET;
+        /* setup instructions */
+#ifdef __thumb__
+        code.u16[0] = 0xdf00; /* svc #0 */
+        code.u16[1] = 0xbe00; /* bkpt #0 */
+        code_size = 2 * 2;
+#else
+        code.u32[0] = 0xef000000; /* svc #0 */
+        code.u32[1] = 0xe1200070; /* bkpt #0 */
+        code_size = 2 * 4;
+#endif
+        /* setup registers */
+        regs.uregs[15] = injector->code_addr;
         regs.uregs[7] = syscall_number;
         regs.uregs[0] = arg1;
         regs.uregs[1] = arg2;
@@ -154,7 +135,12 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         reg_return = &regs.uregs[0];
 #endif
 #if defined(__aarch64__)
-        regs.pc = injector->trampoline_addr + TRAMPOLINE_SYSCALL_OFFSET;
+        /* setup instructions */
+        code.u32[0] = 0xd4000001; /* svc #0 */
+        code.u32[1] = 0xd4200000; /* brk #0 */
+        code_size = 2 * 4;
+        /* setup registers */
+        regs.pc = injector->code_addr;
         regs.regs[8] = syscall_number;
         regs.regs[0] = arg1;
         regs.regs[1] = arg2;
@@ -166,12 +152,12 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #endif
     }
 
-    if (injector__run_code(injector, &regs) != 0) {
+    if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
         return -1;
     }
 
     if (retval != NULL) {
-        if (*reg_return <= -4096ul) {
+        if ((unsigned long)*reg_return <= -4096ul) {
             *retval = (long)*reg_return;
         } else {
             errno = -((long)*reg_return);
@@ -182,16 +168,22 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 }
 
 /*
+ * Call the function at the specified address in the target process.
+ *
  * The arguments after function_addr must be integer types and
  * the size must not be greater than the size of long.
  */
 int injector__call_function(const injector_t *injector, long *retval, long function_addr, ...)
 {
     struct user_regs_struct regs = injector->regs;
+    code_t code;
+    size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
 #ifdef __LP64__
     unsigned long long *reg_return;
+#elif defined(__i386__)
+    long *reg_return;
 #else
     unsigned long *reg_return;
 #endif
@@ -206,9 +198,16 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     va_end(ap);
 
     switch (injector->e_machine) {
-#if defined(__x86_64__)
+#if defined(__x86_64__) /* x86_64 target process */
     case EM_X86_64:
-        regs.rip = injector->trampoline_addr + TRAMPOLINE_FUNCTION_OFFSET;
+        /* setup instructions */
+        code.u8[0] = 0xff;
+        code.u8[1] = 0xd0; /* ff d0 : callq *%rax */
+        code.u8[2] = 0xcc; /* cc    : int3        */
+        memset(&code.u8[3], 0x90, sizeof(long) - 3); /* fill the rests with `nop` */
+        code_size = sizeof(long);
+        /* setup registers */
+        regs.rip = injector->code_addr;
         regs.rbp = injector->stack + injector->stack_size - 16;
         /* rsp should be at 16-byte boundary after call instruction.*/
         regs.rsp = injector->stack + injector->stack_size - (2 * 16) + 8;
@@ -223,8 +222,15 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         break;
 #endif
     default:
-#if defined(__x86_64__) || defined(__i386__)
-        regs.eip = injector->trampoline_addr + TRAMPOLINE_FUNCTION_OFFSET;
+#if defined(__x86_64__) || defined(__i386__) /* i386 target process */
+        /* setup instructions */
+        code.u8[0] = 0xff;
+        code.u8[1] = 0xd0; /* ff d0 : call *%eax */
+        code.u8[2] = 0xcc; /* cc    : int3       */
+        memset(&code.u8[3], 0x90, sizeof(long) - 3); /* fill the rests with `nop` */
+        code_size = sizeof(long);
+        /* setup registers */
+        regs.eip = injector->code_addr;
         regs.ebp = injector->stack + injector->stack_size - 16;
         /* esp should be at 16-byte boundary after call instruction.*/
         regs.esp = injector->stack + injector->stack_size - (3 * 16) + 4;
@@ -238,7 +244,18 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         reg_return = &regs.eax;
 #endif
 #if defined(__arm__)
-        regs.uregs[15] = injector->trampoline_addr + TRAMPOLINE_FUNCTION_OFFSET;
+        /* setup instructions */
+#ifdef __thumb__
+        code.u16[0] = 0x47a0; /* blx r4 */
+        code.u16[1] = 0xbe00; /* bkpt #0 */
+        code_size = 2 * 2;
+#else
+        code.u32[0] = 0xe12fff34; /* blx r4 */
+        code.u32[1] = 0xe1200070; /* bkpt #0 */
+        code_size = 2 * 4;
+#endif
+        /* setup registers */
+        regs.uregs[15] = injector->code_addr;
         regs.uregs[13] = injector->stack + injector->stack_size - 16;
         regs.uregs[4] = function_addr;
         regs.uregs[0] = arg1;
@@ -250,7 +267,12 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         reg_return = &regs.uregs[0];
 #endif
 #if defined(__aarch64__)
-        regs.pc = injector->trampoline_addr + TRAMPOLINE_FUNCTION_OFFSET;
+        /* setup instructions */
+        code.u32[0] = 0xd63f00c0; /* blr x6 */
+        code.u32[1] = 0xd4200000; /* brk #0 */
+        code_size = 2 * 4;
+        /* setup registers */
+        regs.pc = injector->code_addr;
         regs.sp = injector->stack + injector->stack_size - 16;
         regs.regs[6] = function_addr;
         regs.regs[0] = arg1;
@@ -263,7 +285,7 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
 #endif
     }
 
-    if (injector__run_code(injector, &regs) != 0) {
+    if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
         return -1;
     }
 
@@ -271,4 +293,60 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         *retval = (long)*reg_return;
     }
     return 0;
+}
+
+static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size)
+{
+    int status;
+    int rv = -1;
+
+    if (injector__set_regs(injector, regs) != 0) {
+        return -1;
+    }
+    if (injector__write(injector, injector->code_addr, code, code_size) != 0) {
+        injector__set_regs(injector, &injector->regs);
+        return -1;
+    }
+
+    if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
+        injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+        goto cleanup;
+    }
+    while (1) {
+        pid_t pid = waitpid(injector->pid, &status, 0);
+        if (pid == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            injector__set_errmsg("waitpid error: %s", strerror(errno));
+            goto cleanup;
+        }
+        if (WIFSTOPPED(status)) {
+            if (WSTOPSIG(status) == SIGTRAP) {
+                break;
+            }
+            if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
+                injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+                goto cleanup;
+            }
+        } else if (WIFEXITED(status)) {
+            injector__set_errmsg("The target process unexpectedly terminated with exit code %d.", WEXITSTATUS(status));
+            goto cleanup;
+        } else if (WIFSIGNALED(status)) {
+            injector__set_errmsg("The target process unexpectedly terminated by signal %d.", WTERMSIG(status));
+            goto cleanup;
+        } else {
+            /* never reach here */
+            injector__set_errmsg("Unexpected waitpid status: 0x%x", status);
+            goto cleanup;
+        }
+    }
+    if (injector__get_regs(injector, regs) != 0) {
+        goto cleanup;
+    }
+    rv = 0;
+cleanup:
+    injector__set_regs(injector, &injector->regs);
+    injector__write(injector, injector->code_addr, &injector->backup_code, code_size);
+    return rv;
 }

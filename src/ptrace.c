@@ -22,12 +22,11 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
-#include <sys/types.h>
-#include <sys/wait.h>
 #include "injector_internal.h"
 
 #if defined(__aarch64__)
 #define USE_REGSET
+#include <elf.h> /* for NT_PRSTATUS */
 #include <sys/uio.h> /* for struct iovec */
 #endif
 
@@ -57,7 +56,7 @@ int injector__get_regs(const injector_t *injector, struct user_regs_struct *regs
 int injector__set_regs(const injector_t *injector, const struct user_regs_struct *regs)
 {
 #ifdef USE_REGSET
-    struct iovec iovec = { regs, sizeof(*regs) };
+    struct iovec iovec = { (void*)regs, sizeof(*regs) };
     PTRACE_OR_RETURN(PTRACE_SETREGSET, injector, (void*)NT_PRSTATUS, &iovec);
 #else
     PTRACE_OR_RETURN(PTRACE_SETREGS, injector, 0, regs);
@@ -119,46 +118,6 @@ int injector__write(const injector_t *injector, size_t addr, const void *buf, si
             *(dest++) = *(src++);
         }
         PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, addr, word);
-    }
-    return 0;
-}
-
-int injector__run_code(const injector_t *injector, struct user_regs_struct *regs)
-{
-    int status;
-
-    if (injector__set_regs(injector, regs) != 0) {
-        return -1;
-    }
-    PTRACE_OR_RETURN(PTRACE_CONT, injector, 0, 0);
-    while (1) {
-        pid_t pid = waitpid(injector->pid, &status, 0);
-        if (pid == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            injector__set_errmsg("waitpid error: %s", strerror(errno));
-            return -1;
-        }
-        if (WIFSTOPPED(status)) {
-            if (WSTOPSIG(status) == SIGTRAP) {
-                break;
-            }
-            PTRACE_OR_RETURN(PTRACE_CONT, injector, 0, 0);
-        } else if (WIFEXITED(status)) {
-            injector__set_errmsg("The target process unexpectedly terminated with exit code %d.", WEXITSTATUS(status));
-            return -1;
-        } else if (WIFSIGNALED(status)) {
-            injector__set_errmsg("The target process unexpectedly terminated by signal %d.", WTERMSIG(status));
-            return -1;
-        } else {
-            /* never reach here */
-            injector__set_errmsg("Unexpected waitpid status: 0x%x", status);
-            return -1;
-        }
-    }
-    if (injector__get_regs(injector, regs) != 0) {
-        return -1;
     }
     return 0;
 }

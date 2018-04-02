@@ -7,14 +7,12 @@ However the way to call `__libc_dlopen_mode` in `libc.so.6` is
 thoroughly different.
 
 * `linux-inject` writes about 80 bytes of code to the target process
-  on x86_64. This does only 8 bytes on [x86_64][] and [i386][].
+  on x86_64. This writes only `sizeof(long)` bytes on x86_64 and i386.
 * `linux-inject` writes code at the firstly found executable region
-  of memory, which may be referred by other threads. This writes the
-  8 bytes at [the entry point of `libc.so.6`][libc_main], which will be referred by
+  of memory, which may be referred by other threads. This writes it
+  at [the entry point of `libc.so.6`][libc_main], which will be referred by
   nobody unless the libc itself is executed as a program.
 
-[x86_64]: https://github.com/kubo/injector/blob/master/src/cpudep.c#L33-L42
-[i386]: https://github.com/kubo/injector/blob/master/src/cpudep.c#L47-L56
 [libc_main]: https://github.com/lattera/glibc/blob/master/csu/version.c#L68-L77
 
 This was tested only on Ubuntu 16.04 x86_64. It may not work on other

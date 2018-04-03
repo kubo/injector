@@ -131,6 +131,7 @@ int injector__collect_libc_information(injector_t *injector)
             break;
         }
     }
+    injector->elf_class = ehdr.e_ident[EI_CLASS];
     injector->e_machine = ehdr.e_machine;
     injector->dlopen_addr = libc_addr + dlopen_offset;
     injector->code_addr = libc_addr + ehdr.e_entry;
@@ -221,7 +222,7 @@ static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)
         break;
     case ELFCLASS64:
 #ifndef __LP64__
-        injector__set_errmsg("The target process is 64-bit.");
+        injector__set_errmsg("64-bit target process isn't supported by 32-bit process.");
         return -1;
 #endif
         break;

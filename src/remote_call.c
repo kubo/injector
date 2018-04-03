@@ -55,7 +55,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
-#ifdef __LP64__
+#if defined(__LP64__) || defined(__x86_64__)
     unsigned long long *reg_return;
 #elif defined(__i386__)
     long *reg_return;
@@ -180,7 +180,7 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
-#ifdef __LP64__
+#if defined(__LP64__) || defined(__x86_64__)
     unsigned long long *reg_return;
 #elif defined(__i386__)
     long *reg_return;

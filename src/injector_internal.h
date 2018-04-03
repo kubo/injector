@@ -60,6 +60,7 @@ struct injector {
     pid_t pid;
     uint8_t attached;
     uint8_t mmapped;
+    uint8_t elf_class;
     uint16_t e_machine;
     struct user_regs_struct regs;
     size_t dlopen_addr;

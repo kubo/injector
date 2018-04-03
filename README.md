@@ -36,7 +36,7 @@ injector process \ target process | x86_64 | i386 | x32(*1)
 
 Experimental code for `armel`, `armhf` and `aarch64` is implemented. However
 I have not tested it. It may work if my knowledge got from google is correct
-and `bkpt`(arm) and `brk`(aarch64) instructions raise `SIGTRAP` as I guess.
+and `BREAKINST` in [remote_call.c][] raises `SIGTRAP` as I guess.
 
 # Caveats
 
@@ -58,3 +58,4 @@ Files under [`cmd`][] are licensed under GPL 2 or later.
 [`cmd`]: cmd
 [`include`]: include
 [`src`]: src
+[remote_call.c]: src/remote_call.c

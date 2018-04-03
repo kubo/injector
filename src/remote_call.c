@@ -40,6 +40,20 @@
 #define ebp rbp
 #endif
 
+#ifdef __arm__
+#ifdef __thumb__
+/* BREAKINST_THUMB in linux-source-tree/arch/arm/kernel/ptrace.c */
+#define BREAKINST 0xde01
+#else
+/* BREAKINST_ARM in linux-source-tree/arch/arm/kernel/ptrace.c */
+#define BREAKINST 0xe7f001f0
+#endif
+#endif
+
+#ifdef __aarch64__
+#define BREAKINST 0xd4200000 /* asm("brk #0") */
+#endif
+
 static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size);
 
 /*
@@ -116,11 +130,11 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         /* setup instructions */
 #ifdef __thumb__
         code.u16[0] = 0xdf00; /* svc #0 */
-        code.u16[1] = 0xbe00; /* bkpt #0 */
+        code.u16[1] = BREAKINST;
         code_size = 2 * 2;
 #else
         code.u32[0] = 0xef000000; /* svc #0 */
-        code.u32[1] = 0xe1200070; /* bkpt #0 */
+        code.u32[1] = BREAKINST;
         code_size = 2 * 4;
 #endif
         /* setup registers */
@@ -137,7 +151,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #if defined(__aarch64__)
         /* setup instructions */
         code.u32[0] = 0xd4000001; /* svc #0 */
-        code.u32[1] = 0xd4200000; /* brk #0 */
+        code.u32[1] = BREAKINST;
         code_size = 2 * 4;
         /* setup registers */
         regs.pc = injector->code_addr;
@@ -247,11 +261,11 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         /* setup instructions */
 #ifdef __thumb__
         code.u16[0] = 0x47a0; /* blx r4 */
-        code.u16[1] = 0xbe00; /* bkpt #0 */
+        code.u16[1] = BREAKINST;
         code_size = 2 * 2;
 #else
         code.u32[0] = 0xe12fff34; /* blx r4 */
-        code.u32[1] = 0xe1200070; /* bkpt #0 */
+        code.u32[1] = BREAKINST;
         code_size = 2 * 4;
 #endif
         /* setup registers */
@@ -269,7 +283,7 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
 #if defined(__aarch64__)
         /* setup instructions */
         code.u32[0] = 0xd63f00c0; /* blr x6 */
-        code.u32[1] = 0xd4200000; /* brk #0 */
+        code.u32[1] = BREAKINST;
         code_size = 2 * 4;
         /* setup registers */
         regs.pc = injector->code_addr;

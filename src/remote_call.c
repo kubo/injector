@@ -322,11 +322,17 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
             goto cleanup;
         }
         if (WIFSTOPPED(status)) {
-            if (WSTOPSIG(status) == SIGTRAP) {
+            switch (WSTOPSIG(status)) {
+            case SIGTRAP:
+                goto got_sigtrap;
+            case SIGSTOP:
+                if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
+                    injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+                    goto cleanup;
+                }
                 break;
-            }
-            if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
-                injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+            default:
+                injector__set_errmsg("The target process unexpectedly stopped by signal %d.", WSTOPSIG(status));
                 goto cleanup;
             }
         } else if (WIFEXITED(status)) {
@@ -341,9 +347,11 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
             goto cleanup;
         }
     }
+got_sigtrap:
     if (injector__get_regs(injector, regs) != 0) {
         goto cleanup;
     }
+    /* success */
     rv = 0;
 cleanup:
     injector__set_regs(injector, &injector->regs);

@@ -138,6 +138,9 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         code_size = 2 * 4;
 #endif
         /* setup registers */
+#ifdef __thumb__
+        regs.uregs[16] |= 1u << 5;
+#endif
         regs.uregs[15] = injector->code_addr;
         regs.uregs[7] = syscall_number;
         regs.uregs[0] = arg1;
@@ -269,6 +272,9 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         code_size = 2 * 4;
 #endif
         /* setup registers */
+#ifdef __thumb__
+        regs.uregs[16] |= 1u << 5;
+#endif
         regs.uregs[15] = injector->code_addr;
         regs.uregs[13] = injector->stack + injector->stack_size - 16;
         regs.uregs[4] = function_addr;

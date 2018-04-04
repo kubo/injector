@@ -30,13 +30,16 @@ injector process \ target process | x86_64 | i386 | x32(*1)
 **i386**   | failure(*2) | success | failure(*3)
 **x32**(*1) | failure(*2) | success | failure(*3)
 
+injector process \ target process | arm64 | armhf | armel
+---|---|---|---
+**arm64** | success | failure(*4) | -
+**armhf** | failure(*2) | success | -
+**armel** |  - | - | success
+
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
-*3: failure with `x32-ABI target process is supported only by x86_64`.
-
-Experimental code for `armel`, `armhf` and `aarch64` is implemented. However
-I have not tested it. It may work if my knowledge got from google is correct
-and `BREAKINST` in [remote_call.c][] raises `SIGTRAP` as I guess.
+*3: failure with `x32-ABI target process is supported only by x86_64`.  
+*4: failure with `PTRACE_SETREGSET error : Invalid argument`.
 
 # Caveats
 

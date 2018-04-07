@@ -3,4 +3,9 @@
 /cmd/injector
 /src/libinjector.a
 /src/libinjector.so
-
+/tests/test-library.so
+/tests/test-library-*.so
+/tests/test-prog
+/tests/test-prog-*
+/tests/test-target
+/tests/test-target-*

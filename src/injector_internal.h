@@ -50,6 +50,15 @@
     } \
 } while (0)
 
+typedef enum {
+    ARCH_X86_64,
+    ARCH_X86_64_X32,
+    ARCH_I386,
+    ARCH_ARM64,
+    ARCH_ARM_EABI_THUMB,
+    ARCH_ARM_EABI,
+} arch_t;
+
 typedef union {
     uint8_t u8[8];
     uint16_t u16[4];
@@ -60,8 +69,7 @@ struct injector {
     pid_t pid;
     uint8_t attached;
     uint8_t mmapped;
-    uint8_t elf_class;
-    uint16_t e_machine;
+    arch_t arch;
     struct user_regs_struct regs;
     size_t dlopen_addr;
     size_t code_addr; /* address where instructions are written */
@@ -95,4 +103,5 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
 extern char injector__errmsg[];
 extern char injector__errmsg_is_set;
 void injector__set_errmsg(const char *format, ...);
+const char *injector__arch2name(arch_t arch);
 #endif

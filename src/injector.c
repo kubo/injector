@@ -29,17 +29,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
-#include <sys/syscall.h>
 #include <unistd.h>
 #include <limits.h>
-#include <elf.h>
 #include "injector_internal.h"
-
-#ifdef __x86_64__
-#define SYS32_mmap2    192  /* SYS_mmap2 of i386 */
-#define SYS32_mprotect 125  /* SYS_mprotect of i386 */
-#define SYS32_munmap    91  /* SYS_munmap of i386 */
-#endif
 
 injector_t *injector_new(pid_t pid)
 {
@@ -75,41 +67,6 @@ injector_t *injector_new(pid_t pid)
 
     injector->text_size = sysconf(_SC_PAGESIZE);
     injector->stack_size = 2 * 1024 * 1024;
-
-#if defined(__i386__) || defined(__arm__)
-    injector->sys_mmap = SYS_mmap2;
-#else
-    injector->sys_mmap = SYS_mmap;
-#endif
-    injector->sys_mprotect = SYS_mprotect;
-    injector->sys_munmap = SYS_munmap;
-
-#if defined(__x86_64__) || defined(__i386__)
-    switch (injector->e_machine) {
-    case EM_X86_64:
-#ifdef __LP64__
-        if (injector->elf_class == ELFCLASS32) { /* x32 ABI */
-            injector->sys_mmap |= __X32_SYSCALL_BIT;
-            injector->sys_mprotect |= __X32_SYSCALL_BIT;
-            injector->sys_munmap |= __X32_SYSCALL_BIT;
-        }
-#else
-        injector__set_errmsg("x32-ABI target process is supported only by x86_64.");
-        goto error_exit;
-#endif /* __LP64__ */
-        break;
-    case EM_386:
-#ifdef __x86_64__
-        injector->sys_mmap = SYS32_mmap2;
-        injector->sys_mprotect = SYS32_mprotect;
-        injector->sys_munmap = SYS32_munmap;
-#endif /* __x86_64__ */
-        break;
-    default:
-        injector__set_errmsg("Unsupported target architecture: 0x%04x", injector->e_machine);
-        goto error_exit;
-    }
-#endif /* defined(__x86_64__) || defined(__i386__) */
 
     if (injector__call_syscall(injector, &retval, injector->sys_mmap, 0,
                              injector->text_size + injector->stack_size, PROT_READ,

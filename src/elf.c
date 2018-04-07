@@ -131,13 +131,57 @@ int injector__collect_libc_information(injector_t *injector)
             break;
         }
     }
-    injector->elf_class = ehdr.e_ident[EI_CLASS];
-    injector->e_machine = ehdr.e_machine;
+
     injector->dlopen_addr = libc_addr + dlopen_offset;
     injector->code_addr = libc_addr + ehdr.e_entry;
-#ifdef __thumb__
-    injector->code_addr &= ~1;
-#endif
+
+    switch (ehdr.e_machine) {
+    case EM_X86_64:
+        if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
+            /* LP64 */
+            injector->arch = ARCH_X86_64;
+            injector->sys_mmap = 9;
+            injector->sys_mprotect = 10;
+            injector->sys_munmap = 11;
+        } else {
+            /* ILP32 */
+            injector->arch = ARCH_X86_64_X32;
+            injector->sys_mmap = 0x40000000 + 9;
+            injector->sys_mprotect = 0x40000000 + 10;
+            injector->sys_munmap = 0x40000000 + 11;
+        }
+        break;
+    case EM_386:
+        injector->arch = ARCH_I386;
+        injector->sys_mmap = 192;
+        injector->sys_mprotect = 125;
+        injector->sys_munmap = 91;
+        break;
+    case EM_AARCH64:
+        injector->arch = ARCH_ARM64;
+        injector->sys_mmap = 222;
+        injector->sys_mprotect = 226;
+        injector->sys_munmap = 215;
+        break;
+    case EM_ARM:
+        if (EF_ARM_EABI_VERSION(ehdr.e_flags) == 0) {
+            injector__set_errmsg("ARM OABI target process isn't supported.");
+            goto cleanup;
+        }
+        if (injector->code_addr & 1u) {
+            injector->code_addr &= ~1u;
+            injector->arch = ARCH_ARM_EABI_THUMB;
+        } else {
+            injector->arch = ARCH_ARM_EABI;
+        }
+        injector->sys_mmap = 192;
+        injector->sys_mprotect = 125;
+        injector->sys_munmap = 91;
+        break;
+    default:
+        injector__set_errmsg("Unknown target process architecture: 0x%04x", ehdr.e_machine);
+        goto cleanup;
+    }
     rv = 0;
 cleanup:
     fclose(fp);

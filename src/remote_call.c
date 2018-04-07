@@ -24,7 +24,6 @@
  */
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <elf.h>
 #include "injector_internal.h"
 
 #ifdef __x86_64__
@@ -40,18 +39,23 @@
 #define ebp rbp
 #endif
 
-#ifdef __arm__
-#ifdef __thumb__
-/* BREAKINST_THUMB in linux-source-tree/arch/arm/kernel/ptrace.c */
-#define BREAKINST 0xde01
-#else
-/* BREAKINST_ARM in linux-source-tree/arch/arm/kernel/ptrace.c */
-#define BREAKINST 0xe7f001f0
-#endif
+#if defined(__arm__)
+#define reg32_return reg_return
+#define uregs regs.uregs
 #endif
 
-#ifdef __aarch64__
-#define BREAKINST 0xd4200000 /* asm("brk #0") */
+#define THUMB_MODE_BIT (1u << 5)
+#define BREAKINST_THUMB 0xde01 /* in linux-source-tree/arch/arm/kernel/ptrace.c */
+#define BREAKINST_ARM 0xe7f001f0 /* in linux-source-tree/arch/arm/kernel/ptrace.c */
+#define BREAKINST_ARM64 0xd4200000 /* asm("brk #0") */
+
+/* register type used in struct user_regs_struct */
+#if defined(__LP64__) || defined(__x86_64__)
+typedef unsigned long long user_reg_t;
+#elif defined(__i386__)
+typedef long user_reg_t;
+#else
+typedef unsigned long user_reg_t;
 #endif
 
 static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size);
@@ -69,12 +73,10 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
-#if defined(__LP64__) || defined(__x86_64__)
-    unsigned long long *reg_return;
-#elif defined(__i386__)
-    long *reg_return;
-#else
-    unsigned long *reg_return;
+    user_reg_t *reg_return = NULL;
+#if defined(__aarch64__)
+    uint32_t *reg32_return = NULL;
+    uint32_t *uregs = (uint32_t *)&regs;
 #endif
 
     va_start(ap, syscall_number);
@@ -86,9 +88,17 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     arg6 = va_arg(ap, long);
     va_end(ap);
 
-    switch (injector->e_machine) {
-#if defined(__x86_64__)
-    case EM_X86_64:
+#if !(defined(__x86_64__) && defined(__LP64__))
+    if (injector->arch == ARCH_X86_64_X32) {
+        injector__set_errmsg("x32-ABI target process is supported only by x86_64.");
+        return -1;
+    }
+#endif
+
+    switch (injector->arch) {
+#if defined(__x86_64__) && defined(__LP64__)
+    case ARCH_X86_64:
+    case ARCH_X86_64_X32:
         /* setup instructions */
         code.u8[0] = 0x0f;
         code.u8[1] = 0x05; /* 0f 05 : syscall */
@@ -107,8 +117,8 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         reg_return = &regs.rax;
         break;
 #endif
-    default:
 #if defined(__x86_64__) || defined(__i386__)
+    case ARCH_I386:
         /* setup instructions */
         code.u8[0] = 0xcd;
         code.u8[1] = 0x80; /* cd 80 : int $80 */
@@ -125,36 +135,13 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         regs.edi = arg5;
         regs.ebp = arg6;
         reg_return = &regs.eax;
-#endif
-#if defined(__arm__)
-        /* setup instructions */
-#ifdef __thumb__
-        code.u16[0] = 0xdf00; /* svc #0 */
-        code.u16[1] = BREAKINST;
-        code_size = 2 * 2;
-#else
-        code.u32[0] = 0xef000000; /* svc #0 */
-        code.u32[1] = BREAKINST;
-        code_size = 2 * 4;
-#endif
-        /* setup registers */
-#ifdef __thumb__
-        regs.uregs[16] |= 1u << 5;
-#endif
-        regs.uregs[15] = injector->code_addr;
-        regs.uregs[7] = syscall_number;
-        regs.uregs[0] = arg1;
-        regs.uregs[1] = arg2;
-        regs.uregs[2] = arg3;
-        regs.uregs[3] = arg4;
-        regs.uregs[4] = arg5;
-        regs.uregs[5] = arg6;
-        reg_return = &regs.uregs[0];
+        break;
 #endif
 #if defined(__aarch64__)
+    case ARCH_ARM64:
         /* setup instructions */
         code.u32[0] = 0xd4000001; /* svc #0 */
-        code.u32[1] = BREAKINST;
+        code.u32[1] = BREAKINST_ARM64;
         code_size = 2 * 4;
         /* setup registers */
         regs.pc = injector->code_addr;
@@ -166,7 +153,51 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         regs.regs[4] = arg5;
         regs.regs[5] = arg6;
         reg_return = &regs.regs[0];
+        break;
 #endif
+#if defined(__aarch64__) || defined(__arm__)
+    case ARCH_ARM_EABI_THUMB:
+        /* setup instructions */
+        code.u16[0] = 0xdf00; /* svc #0 */
+        code.u16[1] = BREAKINST_THUMB;
+#ifdef __LP64__
+        code.u16[2] = 0x46c0; /* nop (mov r8, r8) */
+        code.u16[3] = 0x46c0; /* nop (mov r8, r8) */
+#endif
+        code_size = sizeof(long);
+        /* setup registers */
+        uregs[16] |= THUMB_MODE_BIT;
+        uregs[15] = injector->code_addr;
+        uregs[7] = syscall_number;
+        uregs[0] = arg1;
+        uregs[1] = arg2;
+        uregs[2] = arg3;
+        uregs[3] = arg4;
+        uregs[4] = arg5;
+        uregs[5] = arg6;
+        reg32_return = &uregs[0];
+        break;
+    case ARCH_ARM_EABI:
+        /* setup instructions */
+        code.u32[0] = 0xef000000; /* svc #0 */
+        code.u32[1] = BREAKINST_ARM;
+        code_size = 2 * 4;
+        /* setup registers */
+        uregs[16] &= ~THUMB_MODE_BIT;
+        uregs[15] = injector->code_addr;
+        uregs[7] = syscall_number;
+        uregs[0] = arg1;
+        uregs[1] = arg2;
+        uregs[2] = arg3;
+        uregs[3] = arg4;
+        uregs[4] = arg5;
+        uregs[5] = arg6;
+        reg32_return = &uregs[0];
+        break;
+#endif
+    default:
+        injector__set_errmsg("Unexpected architecture: %s", injector__arch2name(injector->arch));
+        return -1;
     }
 
     if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
@@ -174,12 +205,25 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     }
 
     if (retval != NULL) {
-        if ((unsigned long)*reg_return <= -4096ul) {
-            *retval = (long)*reg_return;
+#if defined(__aarch64__)
+        if (reg32_return != NULL) {
+            if (*reg32_return <= -4096u) {
+                *retval = (long)*reg32_return;
+            } else {
+                errno = -((int)*reg32_return);
+                *retval = -1;
+            }
         } else {
-            errno = -((long)*reg_return);
-            *retval = -1;
+#endif
+            if ((unsigned long)*reg_return <= -4096ul) {
+                *retval = (long)*reg_return;
+            } else {
+                errno = -((long)*reg_return);
+                *retval = -1;
+            }
+#if defined(__aarch64__)
         }
+#endif
     }
     return 0;
 }
@@ -197,12 +241,10 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
-#if defined(__LP64__) || defined(__x86_64__)
-    unsigned long long *reg_return;
-#elif defined(__i386__)
-    long *reg_return;
-#else
-    unsigned long *reg_return;
+    user_reg_t *reg_return = NULL;
+#if defined(__aarch64__)
+    uint32_t *reg32_return = NULL;
+    uint32_t *uregs = (uint32_t *)&regs;
 #endif
 
     va_start(ap, function_addr);
@@ -214,9 +256,10 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     arg6 = va_arg(ap, long);
     va_end(ap);
 
-    switch (injector->e_machine) {
-#if defined(__x86_64__) /* x86_64 target process */
-    case EM_X86_64:
+    switch (injector->arch) {
+#if defined(__x86_64__) && defined(__LP64__)
+    case ARCH_X86_64:
+    case ARCH_X86_64_X32:
         /* setup instructions */
         code.u8[0] = 0xff;
         code.u8[1] = 0xd0; /* ff d0 : callq *%rax */
@@ -238,8 +281,8 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         reg_return = &regs.rax;
         break;
 #endif
-    default:
-#if defined(__x86_64__) || defined(__i386__) /* i386 target process */
+#if defined(__x86_64__) || defined(__i386__)
+    case ARCH_I386:
         /* setup instructions */
         code.u8[0] = 0xff;
         code.u8[1] = 0xd0; /* ff d0 : call *%eax */
@@ -259,37 +302,13 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.esp + 16, arg5);
         PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.esp + 20, arg6);
         reg_return = &regs.eax;
-#endif
-#if defined(__arm__)
-        /* setup instructions */
-#ifdef __thumb__
-        code.u16[0] = 0x47a0; /* blx r4 */
-        code.u16[1] = BREAKINST;
-        code_size = 2 * 2;
-#else
-        code.u32[0] = 0xe12fff34; /* blx r4 */
-        code.u32[1] = BREAKINST;
-        code_size = 2 * 4;
-#endif
-        /* setup registers */
-#ifdef __thumb__
-        regs.uregs[16] |= 1u << 5;
-#endif
-        regs.uregs[15] = injector->code_addr;
-        regs.uregs[13] = injector->stack + injector->stack_size - 16;
-        regs.uregs[4] = function_addr;
-        regs.uregs[0] = arg1;
-        regs.uregs[1] = arg2;
-        regs.uregs[2] = arg3;
-        regs.uregs[3] = arg4;
-        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.uregs[13] + 0, arg5);
-        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.uregs[13] + 4, arg6);
-        reg_return = &regs.uregs[0];
+        break;
 #endif
 #if defined(__aarch64__)
+    case ARCH_ARM64:
         /* setup instructions */
         code.u32[0] = 0xd63f00c0; /* blr x6 */
-        code.u32[1] = BREAKINST;
+        code.u32[1] = BREAKINST_ARM64;
         code_size = 2 * 4;
         /* setup registers */
         regs.pc = injector->code_addr;
@@ -302,7 +321,53 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         regs.regs[4] = arg5;
         regs.regs[5] = arg6;
         reg_return = &regs.regs[0];
+        break;
 #endif
+#if defined(__aarch64__) || defined(__arm__)
+    case ARCH_ARM_EABI_THUMB:
+        /* setup instructions */
+        code.u16[0] = 0x47a0; /* blx r4 */
+        code.u16[1] = BREAKINST_THUMB;
+#ifdef __LP64__
+        code.u16[2] = 0x46c0; /* nop (mov r8, r8) */
+        code.u16[3] = 0x46c0; /* nop (mov r8, r8) */
+#endif
+        code_size = sizeof(long);
+        /* setup registers */
+        uregs[16] |= THUMB_MODE_BIT;
+        uregs[15] = injector->code_addr;
+        uregs[13] = injector->stack + injector->stack_size - 16;
+        uregs[4] = function_addr;
+        uregs[0] = arg1;
+        uregs[1] = arg2;
+        uregs[2] = arg3;
+        uregs[3] = arg4;
+        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, uregs[13] + 0, arg5);
+        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, uregs[13] + 4, arg6);
+        reg32_return = &uregs[0];
+        break;
+    case ARCH_ARM_EABI:
+        /* setup instructions */
+        code.u32[0] = 0xe12fff34; /* blx r4 */
+        code.u32[1] = BREAKINST_ARM;
+        code_size = 2 * 4;
+        /* setup registers */
+        uregs[16] &= ~THUMB_MODE_BIT;
+        uregs[15] = injector->code_addr;
+        uregs[13] = injector->stack + injector->stack_size - 16;
+        uregs[4] = function_addr;
+        uregs[0] = arg1;
+        uregs[1] = arg2;
+        uregs[2] = arg3;
+        uregs[3] = arg4;
+        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, uregs[13] + 0, arg5);
+        PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, uregs[13] + 4, arg6);
+        reg32_return = &uregs[0];
+        break;
+#endif
+    default:
+        injector__set_errmsg("Unexpected architecture: %s", injector__arch2name(injector->arch));
+        return -1;
     }
 
     if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
@@ -310,7 +375,15 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     }
 
     if (retval != NULL) {
+#if defined(__aarch64__)
+        if (reg32_return != NULL) {
+            *retval = (long)*reg32_return;
+        } else {
+            *retval = (long)*reg_return;
+        }
+#else
         *retval = (long)*reg_return;
+#endif
     }
     return 0;
 }

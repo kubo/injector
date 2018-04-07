@@ -7,7 +7,7 @@ However the way to call `__libc_dlopen_mode` in `libc.so.6` is
 thoroughly different.
 
 * `linux-inject` writes about 80 bytes of code to the target process
-  on x86_64. This writes only `sizeof(long)` bytes on x86_64 and i386.
+  on x86_64. This writes only four or eight bytes.
 * `linux-inject` writes code at the firstly found executable region
   of memory, which may be referred by other threads. This writes it
   at [the entry point of `libc.so.6`][libc_main], which will be referred by
@@ -15,7 +15,7 @@ thoroughly different.
 
 [libc_main]: https://github.com/lattera/glibc/blob/master/csu/version.c#L68-L77
 
-This was tested only on Ubuntu 16.04 x86_64. It may not work on other
+This was tested only on Ubuntu 16.04 x86_64 and Debian 8 arm64. It may not work on other
 distributions.
 
 A command line utility named `injector` is created under the [`cmd`][]
@@ -32,14 +32,13 @@ injector process \ target process | x86_64 | i386 | x32(*1)
 
 injector process \ target process | arm64 | armhf | armel
 ---|---|---|---
-**arm64** | success | failure(*4) | -
-**armhf** | failure(*2) | success | -
-**armel** |  - | - | success
+**arm64** | success | success | success
+**armhf** | failure(*2) | success | success
+**armel** | failure(*2) | success | success
 
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
-*4: failure with `PTRACE_SETREGSET error : Invalid argument`.
 
 # Caveats
 

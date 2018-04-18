@@ -73,6 +73,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
+    int rv;
     user_reg_t *reg_return = NULL;
 #if defined(__aarch64__)
     uint32_t *reg32_return = NULL;
@@ -91,7 +92,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #if !(defined(__x86_64__) && defined(__LP64__))
     if (injector->arch == ARCH_X86_64_X32) {
         injector__set_errmsg("x32-ABI target process is supported only by x86_64.");
-        return -1;
+        return INJERR_UNSUPPORTED_TARGET;
     }
 #endif
 
@@ -197,11 +198,12 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #endif
     default:
         injector__set_errmsg("Unexpected architecture: %s", injector__arch2name(injector->arch));
-        return -1;
+        return INJERR_UNSUPPORTED_TARGET;
     }
 
-    if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
-        return -1;
+    rv = kick_then_wait_sigtrap(injector, &regs, &code, code_size);
+    if (rv != 0) {
+        return rv;
     }
 
     if (retval != NULL) {
@@ -241,6 +243,7 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
+    int rv;
     user_reg_t *reg_return = NULL;
 #if defined(__aarch64__)
     uint32_t *reg32_return = NULL;
@@ -370,8 +373,9 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         return -1;
     }
 
-    if (kick_then_wait_sigtrap(injector, &regs, &code, code_size) != 0) {
-        return -1;
+    rv = kick_then_wait_sigtrap(injector, &regs, &code, code_size);
+    if (rv != 0) {
+        return rv;
     }
 
     if (retval != NULL) {
@@ -391,18 +395,20 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
 static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size)
 {
     int status;
-    int rv = -1;
+    int rv;
 
-    if (injector__set_regs(injector, regs) != 0) {
-        return -1;
+    rv = injector__set_regs(injector, regs);
+    if (rv != 0) {
+        return rv;
     }
-    if (injector__write(injector, injector->code_addr, code, code_size) != 0) {
+    rv = injector__write(injector, injector->code_addr, code, code_size);
+    if (rv != 0) {
         injector__set_regs(injector, &injector->regs);
-        return -1;
+        return rv;
     }
 
-    if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
-        injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+    rv = injector__continue(injector);
+    if (rv != 0) {
         goto cleanup;
     }
     while (1) {
@@ -412,6 +418,7 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
                 continue;
             }
             injector__set_errmsg("waitpid error: %s", strerror(errno));
+            rv = INJERR_WAIT_TRACEE;
             goto cleanup;
         }
         if (WIFSTOPPED(status)) {
@@ -419,33 +426,34 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
             case SIGTRAP:
                 goto got_sigtrap;
             case SIGSTOP:
-                if (ptrace(PTRACE_CONT, injector->pid, 0, 0) != 0) {
-                    injector__set_errmsg("PTRACE_CONT error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__);
+                rv = injector__continue(injector);
+                if (rv != 0) {
                     goto cleanup;
                 }
                 break;
             default:
                 injector__set_errmsg("The target process unexpectedly stopped by signal %d.", WSTOPSIG(status));
+                rv = INJERR_OTHER;
                 goto cleanup;
             }
         } else if (WIFEXITED(status)) {
             injector__set_errmsg("The target process unexpectedly terminated with exit code %d.", WEXITSTATUS(status));
+            rv = INJERR_OTHER;
             goto cleanup;
         } else if (WIFSIGNALED(status)) {
             injector__set_errmsg("The target process unexpectedly terminated by signal %d.", WTERMSIG(status));
+            rv = INJERR_OTHER;
             goto cleanup;
         } else {
             /* never reach here */
             injector__set_errmsg("Unexpected waitpid status: 0x%x", status);
+            rv = INJERR_OTHER;
             goto cleanup;
         }
     }
 got_sigtrap:
-    if (injector__get_regs(injector, regs) != 0) {
-        goto cleanup;
-    }
     /* success */
-    rv = 0;
+    rv = injector__get_regs(injector, regs);
 cleanup:
     injector__set_regs(injector, &injector->regs);
     injector__write(injector, injector->code_addr, &injector->backup_code, code_size);

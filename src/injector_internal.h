@@ -44,9 +44,9 @@
 #endif
 
 #define PTRACE_OR_RETURN(request, injector, addr, data) do { \
-    if (ptrace(request, injector->pid, addr, data) != 0) { \
-        injector__set_errmsg(#request " error : %s (%s:%d)", strerror(errno), __FILE__, __LINE__); \
-        return -1; \
+    int rv = injector__ptrace(request, injector->pid, addr, data, #request); \
+    if (rv != 0) { \
+        return rv; \
     } \
 } while (0)
 
@@ -87,13 +87,14 @@ struct injector {
 int injector__collect_libc_information(injector_t *injector);
 
 /* ptrace.c */
+int injector__ptrace(int request, pid_t pid, long addr, long data, const char *request_name);
 int injector__attach_process(const injector_t *injector);
 int injector__detach_process(const injector_t *injector);
 int injector__get_regs(const injector_t *injector, struct user_regs_struct *regs);
 int injector__set_regs(const injector_t *injector, const struct user_regs_struct *regs);
 int injector__read(const injector_t *injector, size_t addr, void *buf, size_t len);
 int injector__write(const injector_t *injector, size_t addr, const void *buf, size_t len);
-int injector__cont(const injector_t *injector);
+int injector__continue(const injector_t *injector);
 
 /* remote_call.c - call functions and syscalls in the target process */
 int injector__call_syscall(const injector_t *injector, long *retval, long syscall_number, ...);

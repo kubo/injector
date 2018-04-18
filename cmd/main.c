@@ -100,8 +100,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    injector = injector_new(pid);
-    if (injector == NULL) {
+    if (injector_attach(&injector, pid) != 0) {
         printf("%s\n", injector_error());
         return 1;
     }
@@ -114,6 +113,6 @@ int main(int argc, char **argv)
             fprintf(stderr, "  %s\n", injector_error());
         }
     }
-    injector_delete(injector);
+    injector_detach(injector);
     return 0;
 }

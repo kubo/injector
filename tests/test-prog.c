@@ -70,8 +70,7 @@ int main(int argc, char **argv)
 
     sleep(1);
 
-    injector = injector_new(pid);
-    if (injector == NULL) {
+    if (injector_attach(&injector, pid) != 0) {
         printf("inject error:\n  %s\n", injector_error());
         goto cleanup;
     }
@@ -85,7 +84,7 @@ int main(int argc, char **argv)
     printf("injected.\n");
     fflush(stdout);
 
-    if (injector_delete(injector) != 0) {
+    if (injector_detach(injector) != 0) {
         printf("inject error:\n  %s\n", injector_error());
         goto cleanup;
     }

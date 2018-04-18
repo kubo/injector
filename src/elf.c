@@ -37,7 +37,7 @@
 #define Elf_Sym Elf32_Sym
 #endif
 
-static FILE *open_libc(pid_t pid, size_t *addr);
+static int open_libc(FILE **fp_out, pid_t pid, size_t *addr);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
 static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size);
@@ -60,17 +60,19 @@ int injector__collect_libc_information(injector_t *injector)
     size_t dlopen_offset;
     Elf_Sym sym;
     int idx;
-    size_t rv = -1;
+    int rv;
 
-    fp = open_libc(pid, &libc_addr);
-    if (fp == NULL) {
-        return -1;
+    rv = open_libc(&fp, pid, &libc_addr);
+    if (rv != 0) {
+        return rv;
     }
-    if (read_elf_ehdr(fp, &ehdr) != 0) {
+    rv = read_elf_ehdr(fp, &ehdr);
+    if (rv != 0) {
         goto cleanup;
     }
     fseek(fp, ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize, SEEK_SET);
-    if (read_elf_shdr(fp, &shdr, ehdr.e_shentsize) != 0) {
+    rv = read_elf_shdr(fp, &shdr, ehdr.e_shentsize);
+    if (rv != 0) {
         goto cleanup;
     }
     shstrtab_offset = shdr.sh_offset;
@@ -80,7 +82,8 @@ int injector__collect_libc_information(injector_t *injector)
         fpos_t pos;
         char buf[8];
 
-        if (read_elf_shdr(fp, &shdr, ehdr.e_shentsize) != 0) {
+        rv = read_elf_shdr(fp, &shdr, ehdr.e_shentsize);
+        if (rv != 0) {
             goto cleanup;
         }
         switch (shdr.sh_type) {
@@ -112,18 +115,21 @@ int injector__collect_libc_information(injector_t *injector)
     }
     if (idx == ehdr.e_shnum) {
         injector__set_errmsg("failed to find the .dynstr and .dynsym sections.");
+        rv = INJERR_INVALID_ELF_FORMAT;
         goto cleanup;
     }
 
     dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlopen_mode");
     if (dlopen_st_name == 0) {
         injector__set_errmsg("failed to find __libc_dlopen_mode in the .dynstr section.");
+        rv = INJERR_NO_FUNCTION;
         goto cleanup;
     }
 
     fseek(fp, sym_offset, SEEK_SET);
     for (idx = 0; idx < sym_num; idx++) {
-        if (read_elf_sym(fp, &sym, sym_entsize) != 0) {
+        rv = read_elf_sym(fp, &sym, sym_entsize);
+        if (rv != 0) {
             goto cleanup;
         }
         if (sym.st_name == dlopen_st_name) {
@@ -166,6 +172,7 @@ int injector__collect_libc_information(injector_t *injector)
     case EM_ARM:
         if (EF_ARM_EABI_VERSION(ehdr.e_flags) == 0) {
             injector__set_errmsg("ARM OABI target process isn't supported.");
+            rv = INJERR_UNSUPPORTED_TARGET;
             goto cleanup;
         }
         if (injector->code_addr & 1u) {
@@ -180,6 +187,7 @@ int injector__collect_libc_information(injector_t *injector)
         break;
     default:
         injector__set_errmsg("Unknown target process architecture: 0x%04x", ehdr.e_machine);
+        rv = INJERR_UNSUPPORTED_TARGET;
         goto cleanup;
     }
     rv = 0;
@@ -188,7 +196,7 @@ cleanup:
     return rv;
 }
 
-static FILE *open_libc(pid_t pid, size_t *addr)
+static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
 {
     char buf[512];
     FILE *fp = NULL;
@@ -197,7 +205,7 @@ static FILE *open_libc(pid_t pid, size_t *addr)
     fp = fopen(buf, "r");
     if (fp == NULL) {
         injector__set_errmsg("failed to open %s. (error: %s)", buf, strerror(errno));
-        return NULL;
+        return INJERR_OTHER;
     }
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         unsigned long saddr, eaddr;
@@ -214,33 +222,34 @@ static FILE *open_libc(pid_t pid, size_t *addr)
                     fp = fopen(p, "r");
                     if (fp == NULL) {
                         injector__set_errmsg("failed to open %s. (error: %s)", p, strerror(errno));
-                        return NULL;
+                        return INJERR_NO_LIBRARY;
                     }
                     *addr = saddr;
-                    return fp;
+                    *fp_out = fp;
+                    return 0;
                 } else if (strcmp(endptr, ".so (deleted)\n") == 0) {
                     injector__set_errmsg("The C library when the process started was removed");
                     fclose(fp);
-                    return NULL;
+                    return INJERR_NO_LIBRARY;
                 }
             }
         }
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");
-    return NULL;
+    return INJERR_NO_LIBRARY;
 }
 
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)
 {
     if (fread(ehdr, sizeof(*ehdr), 1, fp) != 1) {
         injector__set_errmsg("failed to read ELF header. (error: %s)", strerror(errno));
-        return -1;
+        return INJERR_INVALID_ELF_FORMAT;
     }
     if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) {
         injector__set_errmsg("Invalid ELF header: 0x%02x,0x%02x,0x%02x,0x%02x",
                            ehdr->e_ident[0], ehdr->e_ident[1], ehdr->e_ident[2], ehdr->e_ident[3]);
-        return -1;
+        return INJERR_INVALID_ELF_FORMAT;
     }
     switch (ehdr->e_ident[EI_CLASS]) {
     case ELFCLASS32:
@@ -267,12 +276,12 @@ static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)
     case ELFCLASS64:
 #ifndef __LP64__
         injector__set_errmsg("64-bit target process isn't supported by 32-bit process.");
-        return -1;
+        return INJERR_UNSUPPORTED_TARGET;
 #endif
         break;
     default:
         injector__set_errmsg("Invalid ELF class: 0x%x", ehdr->e_ident[EI_CLASS]);
-        return -1;
+        return INJERR_UNSUPPORTED_TARGET;
     }
     return 0;
 }
@@ -281,7 +290,7 @@ static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size)
 {
     if (fread(shdr, shdr_size, 1, fp) != 1) {
         injector__set_errmsg("failed to read a section header. (error: %s)", strerror(errno));
-        return -1;
+        return INJERR_INVALID_ELF_FORMAT;
     }
 #ifdef __LP64__
     if (shdr_size == sizeof(Elf32_Shdr)) {
@@ -305,7 +314,7 @@ static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size)
 {
     if (fread(sym, sym_size, 1, fp) != 1) {
         injector__set_errmsg("failed to read a symbol table entry. (error: %s)", strerror(errno));
-        return -1;
+        return INJERR_INVALID_ELF_FORMAT;
     }
 #ifdef __LP64__
     if (sym_size == sizeof(Elf32_Sym)) {

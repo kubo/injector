@@ -78,8 +78,8 @@ armel:
 build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).so
 
 test-prog$(SUFFIX): test-prog.c
-	cd ../src && make clean && make
-	$(LINK_PROG) -o $@ $^ ../src/libinjector.a
+	cd ../src/linux && make clean && make
+	$(LINK_PROG) -o $@ $^ ../src/linux/libinjector.a
 
 test-target$(SUFFIX): test-target.c
 	$(LINK_TARGET) -o $@ $^

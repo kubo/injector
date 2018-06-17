@@ -31,7 +31,7 @@
 #include <sys/user.h>
 #include <sys/ptrace.h>
 #include <errno.h>
-#include "../include/injector.h"
+#include "injector.h"
 
 #ifdef __LP64__
 #define SIZE_T_FMT "l"

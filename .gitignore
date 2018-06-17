@@ -1,8 +1,8 @@
 *~
 *.o
 /cmd/injector
-/src/libinjector.a
-/src/libinjector.so
+/src/linux/libinjector.a
+/src/linux/libinjector.so
 /tests/test-library.so
 /tests/test-library-*.so
 /tests/test-prog

@@ -1,0 +1,38 @@
+# -*- Makefile -*-
+CFLAGS = -nologo -O2 -I../../include
+
+RTFLAG = -MD  # link with dynamic runtime library
+# RTFLAG = /MT  # link with static runtime library
+
+RELEASE_DLL = injector.dll
+DEBUG_DLL = injectord.dll
+RELEASE_STATIC_LIB = injector-static.lib
+DEBUG_STATIC_LIB = injectord-static.lib
+
+RELEASE_OBJS = injector.obj
+DEBUG_OBJS = injectord.obj
+
+TARGETS = $(RELEASE_DLL) $(DEBUG_DLL) $(RELEASE_STATIC_LIB) $(DEBUG_STATIC_LIB)
+
+all: $(TARGETS)
+
+injector.obj: injector.c
+	$(CC) $(CFLAGS) $(RTFLAG) -c /Foinjector.obj injector.c
+
+injectord.obj: injector.c
+	$(CC) $(CFLAGS) $(RTFLAG)d -c /Foinjectord.obj injector.c
+
+injector.dll: $(RELEASE_OBJS)
+	link /nologo /DLL /DEF:injector.def /OUT:injector.dll $(RELEASE_OBJS)
+
+injectord.dll: $(DEBUG_OBJS)
+	link /nologo /DLL /DEF:injector.def /OUT:injectord.dll $(DEBUG_OBJS)
+
+injector-static.lib: $(RELEASE_OBJS)
+	lib /nologo /OUT:injector-static.lib $(RELEASE_OBJS)
+
+injectord-static.lib: $(DEBUG_OBJS)
+	lib /nologo /OUT:injectord-static.lib $(DEBUG_OBJS)
+
+clean:
+	del $(TARGETS) $(RELEASE_OBJS) $(DEBUG_OBJS) injector.lib injectord.lib injector.exp injectord.exp

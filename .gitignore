@@ -1,10 +1,13 @@
 *~
+*.a
+*.dll
+*.exp
+*.lib
 *.o
+*.obj
+*.so
 /cmd/injector
-/src/linux/libinjector.a
-/src/linux/libinjector.so
-/tests/test-library.so
-/tests/test-library-*.so
+/cmd/injector.exe
 /tests/test-prog
 /tests/test-prog-*
 /tests/test-target

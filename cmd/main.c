@@ -25,13 +25,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "injector.h"
+
+#ifdef __linux
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <limits.h>
-#include "injector.h"
 
+#define INVALID_PID -1
 static pid_t find_process(const char *name)
 {
     DIR *dir = opendir("/proc");
@@ -66,10 +69,44 @@ static pid_t find_process(const char *name)
     closedir(dir);
     return pid;
 }
+#endif
+
+#ifdef _WIN32
+#include <windows.h>
+#include <tlhelp32.h>
+#include "../util/ya_getopt.h"
+
+#define INVALID_PID 0
+static DWORD find_process(const char *name)
+{
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    DWORD pid = 0;
+    size_t namelen = strlen(name);
+
+    if (hSnapshot != INVALID_HANDLE_VALUE) {
+        PROCESSENTRY32 pe;
+        pe.dwSize = sizeof(pe);
+
+        if (Process32First(hSnapshot, &pe)) {
+            do {
+                if (_strnicmp(pe.szExeFile, name, namelen) == 0) {
+                    if (pe.szExeFile[namelen] == '\0' || stricmp(pe.szExeFile + namelen, ".exe") == 0) {
+                        pid = pe.th32ProcessID;
+                        break;
+                    }
+                }
+            } while (Process32Next(hSnapshot, &pe));
+        }
+        CloseHandle(hSnapshot);
+    }
+    return pid;
+}
+
+#endif
 
 int main(int argc, char **argv)
 {
-    pid_t pid = -1;
+    injector_pid_t pid = INVALID_PID;
     injector_t *injector;
     int opt;
     int i;
@@ -79,7 +116,7 @@ int main(int argc, char **argv)
         switch (opt) {
         case 'n':
             pid = find_process(optarg);
-            if (pid == -1) {
+            if (pid == INVALID_PID) {
                 fprintf(stderr, "counld not find the process: %s\n", optarg);
                 return 1;
             }
@@ -95,7 +132,7 @@ int main(int argc, char **argv)
             break;
         }
     }
-    if (pid == -1) {
+    if (pid == INVALID_PID) {
         fprintf(stderr, "Usage: %s [-n process-name] [-p pid] library-to-inject ...\n", argv[0]);
         return 1;
     }

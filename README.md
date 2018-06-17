@@ -1,6 +1,8 @@
 # Injector
 
-**Library for injecting a shared library into a Linux process**
+**Library for injecting a shared library into a Linux or Windows process**
+
+## Linux
 
 I was inspired by [`linux-inject`][] and the basic idea came from it.
 However the way to call `__libc_dlopen_mode` in `libc.so.6` is
@@ -22,7 +24,19 @@ A command line utility named `injector` is created under the [`cmd`][]
 directory after running `make`. The usage is same with the [`inject`][]
 command in `linux-inject`.
 
+## Windows
+
+Windows version is also here. It uses well-known [`CreateRemoteThread+LoadLibrary`]
+technique to load a DLL in another process. However this is a bit improved. It gets
+the Win32 error code when `LoadLibrary` fails.
+
+A command line utility named `injector.exe` is created under the [`cmd`][]
+directory after running `nmake -f Makefile.win32` in a Visual Studio command prompt.
+The usage is same with the [`inject`][] command in `linux-inject`.
+
 # Tested Architectures
+
+## Linux
 
 injector process \ target process | x86_64 | i386 | x32(*1)
 ---|---|---|---
@@ -40,6 +54,16 @@ injector process \ target process | arm64 | armhf | armel
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
 
+## Windows
+
+injector process \ target process | x64 | 32-bit
+---|---|---
+**x64**     | success     | failure(*1)
+**32-bit**  | failure(*2) | success
+
+*1: failure with `32-bit target process isn't supported by 64-bit process`.  
+*2: failure with `64-bit target process isn't supported by 32-bit process`.  
+
 # Caveats
 
 [Caveat about `ptrace()`][] is same with `linux-inject`.
@@ -51,8 +75,9 @@ forever. Same caveat is in `linux-inject` also.
 
 # License
 
-Files under [`include`][] and [`src`][] are licensed under LGPL 2.1 or later.
-Files under [`cmd`][] are licensed under GPL 2 or later.
+Files under [`include`][] and [`src`][] are licensed under LGPL 2.1 or later.  
+Files under [`cmd`][] are licensed under GPL 2 or later.  
+Files under [`util`][] are licensed under 2-clause BSD.
 
 [`linux-inject`]: https://github.com/gaffe23/linux-inject
 [Caveat about `ptrace()`]: https://github.com/gaffe23/linux-inject#caveat-about-ptrace
@@ -60,4 +85,5 @@ Files under [`cmd`][] are licensed under GPL 2 or later.
 [`cmd`]: cmd
 [`include`]: include
 [`src`]: src
-[remote_call.c]: src/remote_call.c
+[`util`]: util
+[`CreateRemoteThread+LoadLibrary`]: https://www.google.com/search?&q=CreateRemoteThread+LoadLIbrary

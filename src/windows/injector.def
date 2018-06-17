@@ -1,0 +1,6 @@
+EXPORTS
+    injector_attach
+    injector_inject
+    injector_detach
+    injector_error
+    injector_inject_w

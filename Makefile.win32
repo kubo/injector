@@ -1,0 +1,9 @@
+MAKE_CMD = nmake -nologo -f Makefile.win32
+
+all:
+	cd src/windows && $(MAKE_CMD)
+	cd cmd && $(MAKE_CMD)
+
+clean:
+	cd src/windows && $(MAKE_CMD) clean
+	cd cmd && $(MAKE_CMD) clean

@@ -1,0 +1,20 @@
+# -*- Makefile -*-
+CFLAGS = -nologo -MD -I../include
+
+OBJS = main.obj ya_getopt.obj
+INJECTOR_LIB = ..\src\windows\injector-static.lib
+
+all: injector.exe
+
+injector.exe: $(OBJS) $(INJECTOR_LIB)
+	$(CC) $(CFLAGS) -Feinjector.exe $(OBJS) $(INJECTOR_LIB)
+
+main.obj: main.c
+	$(CC) $(CFLAGS) -c main.c
+ya_getopt.obj: ..\util\ya_getopt.c
+	$(CC) $(CFLAGS) -c ..\util\ya_getopt.c
+$(INJECTOR_LIB):
+	cd ..\src\windows && nmake -f Makefile.win32
+
+clean:
+	del injector.exe $(OBJS)

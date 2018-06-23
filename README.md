@@ -20,19 +20,84 @@ thoroughly different.
 This was tested only on Ubuntu 16.04 x86_64 and Debian 8 arm64. It may not work on other
 distributions.
 
-A command line utility named `injector` is created under the [`cmd`][]
-directory after running `make`. The usage is same with the [`inject`][]
-command in `linux-inject`.
-
 ## Windows
 
 Windows version is also here. It uses well-known [`CreateRemoteThread+LoadLibrary`]
-technique to load a DLL in another process. However this is a bit improved. It gets
+technique to load a DLL into another process. However this is a bit improved. It gets
 the Win32 error code when `LoadLibrary` fails.
 
-A command line utility named `injector.exe` is created under the [`cmd`][]
-directory after running `nmake -f Makefile.win32` in a Visual Studio command prompt.
-The usage is same with the [`inject`][] command in `linux-inject`.
+# Compilation
+
+## Linux
+
+```shell
+$ git clone https://github.com/kubo/injector.git
+$ cd injector
+$ make
+```
+
+The `make` command creates:
+
+| filename | - |
+|---|---|
+|`src/linux/libinjector.a`  |a static library|
+|`src/linux/libinjector.so` |a shared library|
+|`cmd/injector`             |a command line program linked with the static library|
+
+## Windows
+
+Open a Visual Studio command prompt and run the following commands:
+
+```shell
+$ git clone https://github.com/kubo/injector.git # Or use any other tool
+$ cd injector
+$ nmake -f Makefile.win32
+```
+
+The `nmake` command creates:
+
+| filename | - |
+|---|---|
+|`src/windows/injector-static.lib`  |a static library (release build)
+|`src/windows/injector.dll`         |a shared library (release build)
+|`src/windows/injector.lib`         |an import library for `injector.dll`
+|`src/windows/injectord-static.lib` |a static library (debug build)
+|`src/windows/injectord.dll`        |a shared library (debug build)
+|`src/windows/injectord.lib`        |an import library for `injectord.dll`
+|`cmd/injector.exe`                 |a command line program linked the static library (release build)|
+
+# Usage
+
+## C API
+
+```c
+#include <injector.h>
+
+...
+
+    injector_t *injector;
+
+    /* attach to a process whose process id is 1234. */
+    if (injector_attach(&injector, 1234) != 0) {
+        printf("ATTACH ERROR: %s\n", injector_error());
+        return;
+    }
+    /* inject a shared library into the process. */
+    if (injector_inject(injector, "/path/to/shared/library") != 0) {
+        printf("INJECT ERROR: %s\n", injector_error());
+    }
+    /* inject another shared library. */
+    if (injector_inject(injector, "/path/to/another/shared/library") != 0) {
+        printf("INJECT ERROR: %s\n", injector_error());
+    }
+    /* cleanup */
+    injector_detach(injector);
+```
+
+## Command line program
+
+See [`Usage` section and `Sample` section in linux-inject][`inject`] and substitute
+`inject` with `injector` in the page.
 
 # Tested Architectures
 

@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2019 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,13 @@
 #define injector_pid_t pid_t
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+#if 0
+}
+#endif
+
 #define INJERR_SUCCESS 0               /* linux, windows */
 #define INJERR_OTHER -1                /* linux, windows */
 #define INJERR_NO_MEMORY -2            /* linux, windows */
@@ -56,6 +63,13 @@ const char *injector_error(void);
 
 #if defined(_WIN32)
 int injector_inject_w(injector_t *injector, const wchar_t *path);
+#endif
+
+#if 0
+{
+#endif
+#ifdef __cplusplus
+}; /* extern "C" */
 #endif
 
 #endif

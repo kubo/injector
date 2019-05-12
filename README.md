@@ -23,8 +23,12 @@ distributions.
 ## Windows
 
 Windows version is also here. It uses well-known [`CreateRemoteThread+LoadLibrary`]
-technique to load a DLL into another process. However this is a bit improved. It gets
-the Win32 error code when `LoadLibrary` fails.
+technique to load a DLL into another process with some improvements.
+
+1. It gets Win32 error messages when `LoadLibrary` fails by copying assembly
+   code into the target process.
+2. It can inject a 32-bit dll into a 32-bit process from 64-bit processes
+   by checking the export entries in 32-bit kernel32.dll.
 
 # Compilation
 
@@ -123,11 +127,10 @@ injector process \ target process | arm64 | armhf | armel
 
 injector process \ target process | x64 | 32-bit
 ---|---|---
-**x64**     | success     | failure(*1)
-**32-bit**  | failure(*2) | success
+**x64**     | success     | success
+**32-bit**  | failure(*1) | success
 
-*1: failure with `32-bit target process isn't supported by 64-bit process`.  
-*2: failure with `64-bit target process isn't supported by 32-bit process`.  
+*1: failure with `64-bit target process isn't supported by 32-bit process`.  
 
 # Caveats
 

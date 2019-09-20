@@ -272,8 +272,8 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         /* setup registers */
         regs.rip = injector->code_addr;
         regs.rbp = injector->stack + injector->stack_size - 16;
-        /* rsp should be at 16-byte boundary after call instruction.*/
-        regs.rsp = injector->stack + injector->stack_size - (2 * 16) + 8;
+        /* rsp must be aligned to a 16-byte boundary. */
+        regs.rsp = injector->stack + injector->stack_size - (2 * 16);
         regs.rax = function_addr;
         regs.rdi = arg1;
         regs.rsi = arg2;

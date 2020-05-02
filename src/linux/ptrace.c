@@ -69,7 +69,7 @@ int injector__get_regs(const injector_t *injector, struct user_regs_struct *regs
 {
 #ifdef USE_REGSET
     struct iovec iovec = { regs, sizeof(*regs) };
-    PTRACE_OR_RETURN(PTRACE_GETREGSET, injector, NT_PRSTATUS, &iovec);
+    PTRACE_OR_RETURN(PTRACE_GETREGSET, injector, NT_PRSTATUS, (long)&iovec);
 #else
     PTRACE_OR_RETURN(PTRACE_GETREGS, injector, 0, (long)regs);
 #endif
@@ -80,7 +80,7 @@ int injector__set_regs(const injector_t *injector, const struct user_regs_struct
 {
 #ifdef USE_REGSET
     struct iovec iovec = { (void*)regs, sizeof(*regs) };
-    PTRACE_OR_RETURN(PTRACE_SETREGSET, injector, NT_PRSTATUS, &iovec);
+    PTRACE_OR_RETURN(PTRACE_SETREGSET, injector, NT_PRSTATUS, (long)&iovec);
 #else
     PTRACE_OR_RETURN(PTRACE_SETREGS, injector, 0, (long)regs);
 #endif

@@ -212,16 +212,23 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         if (sscanf(buf, "%lx-%lx r-xp", &saddr, &eaddr) == 2) {
             char *p = strstr(buf, "/libc-2.");
             if (p != NULL) {
+                char *libc_path;
                 char *endptr;
                 p += strlen("/libc-2.");
                 strtol(p, &endptr, 10);
                 if (strcmp(endptr, ".so\n") == 0) {
+                    endptr[3] = '\0'; /* terminate with nul at '\n'. */
                     fclose(fp);
-                    p = strchr(buf, '/');
-                    p[strlen(p) - 1] = '\0';
-                    fp = fopen(p, "r");
+                    libc_path = strchr(buf, '/');
+                    fp = fopen(libc_path, "r");
                     if (fp == NULL) {
-                        injector__set_errmsg("failed to open %s. (error: %s)", p, strerror(errno));
+                        p = strstr(libc_path, "/rootfs/"); /* under LXD */
+                        if (p != NULL) {
+                            fp = fopen(p + 7, "r");
+                        }
+                    }
+                    if (fp == NULL) {
+                        injector__set_errmsg("failed to open %s. (error: %s)", libc_path, strerror(errno));
                         return INJERR_NO_LIBRARY;
                     }
                     *addr = saddr;

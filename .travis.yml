@@ -1,0 +1,18 @@
+language: c
+matrix:
+  include:
+    - name: Linux x86_64, x32 and i686
+      os: linux
+      dist: bionic
+      addons:
+        apt:
+          packages:
+            - gcc-multilib
+      script:
+        - make check
+    - name: Linux arm64
+      os: linux
+      dist: bionic
+      arch: arm64
+      script:
+        - make check

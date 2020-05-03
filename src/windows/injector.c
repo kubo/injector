@@ -53,7 +53,7 @@ static char errmsg[512];
 //        return GetLastError();
 //    }
 // }
-#ifdef _WIN64
+#ifdef _M_AMD64
 static const char code64_template[] =
     /* 0000:     */ "\x48\x83\xEC\x28"          // sub  rsp,28h
     /* 0004:     */ "\xFF\x15\x16\x00\x00\x00"  // call LoadLibraryW
@@ -74,6 +74,7 @@ static const char code64_template[] =
 #define CODE64_SIZE          0x0030
 #endif
 
+#if defined(_M_AMD64) || defined(_M_IX86)
 static const char code32_template[] =
     /* 0000:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
 #define CALL_LoadLibraryW  0x0004
@@ -87,6 +88,7 @@ static const char code32_template[] =
     /* 0016: L2: */ "\xC2\x04\x00"              // ret  4
     /* 0019:     */ "\x90\x90\x90";             // 3 * nop
 #define CODE32_SIZE          0x001C
+#endif
 
 #ifdef _WIN64
 #define CODE_SIZE CODE64_SIZE
@@ -133,7 +135,7 @@ static BOOL init(void)
     return TRUE;
 }
 
-#ifdef _WIN64
+#ifdef _M_AMD64
 static int cmp_func(const void *context, const void *key, const void *datum)
 {
     ptrdiff_t rva_to_va = (ptrdiff_t)context;
@@ -307,14 +309,12 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         goto error_exit;
     }
 
-#ifdef _WIN64
     IsWow64Process(injector->hProcess, &is_wow64_proc);
-#else
-    IsWow64Process(GetCurrentProcess(), &is_wow64_proc);
-    if (is_wow64_proc) {
-        /* This process is running on Windows x64. */
-        IsWow64Process(injector->hProcess, &is_wow64_proc);
-        if (!is_wow64_proc) {
+#ifdef _M_IX86
+    if (!is_wow64_proc) {
+        IsWow64Process(GetCurrentProcess(), &is_wow64_proc);
+        if (is_wow64_proc) {
+            /* This process is running on Windows x64. */
             set_errmsg("64-bit target process isn't supported by 32-bit process.");
             rv = INJERR_UNSUPPORTED_TARGET;
             goto error_exit;
@@ -328,7 +328,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         rv = INJERR_OTHER;
         goto error_exit;
     }
-#ifdef _WIN64
+#ifdef _M_AMD64
     if (is_wow64_proc) {
         /* 32-bit process */
         size_t load_library, get_last_error;
@@ -346,7 +346,8 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         *(size_t*)(code + ADDR_LoadLibraryW) = func_LoadLibraryW;
         *(size_t*)(code + ADDR_GetLastError) = func_GetLastError;
     }
-#else
+#endif
+#ifdef _M_IX86
     memcpy(code, code32_template, CODE32_SIZE);
     *(size_t*)(code + CALL_LoadLibraryW + 1) = func_LoadLibraryW - ((size_t)injector->remote_mem + CALL_LoadLibraryW + 5);
     *(size_t*)(code + CALL_GetLastError + 1) = func_GetLastError - ((size_t)injector->remote_mem + CALL_GetLastError + 5);

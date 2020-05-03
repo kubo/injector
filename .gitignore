@@ -1,13 +1,13 @@
 *~
 *.a
 *.dll
+*.exe
 *.exp
 *.lib
 *.o
 *.obj
 *.so
 /cmd/injector
-/cmd/injector.exe
 /tests/test-prog
 /tests/test-prog-*
 /tests/test-target

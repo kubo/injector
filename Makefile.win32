@@ -4,6 +4,10 @@ all:
 	cd src/windows && $(MAKE_CMD)
 	cd cmd && $(MAKE_CMD)
 
+check: all
+	cd tests && $(MAKE_CMD) check
+
 clean:
 	cd src/windows && $(MAKE_CMD) clean
 	cd cmd && $(MAKE_CMD) clean
+	cd tests && $(MAKE_CMD) clean

@@ -16,3 +16,14 @@ matrix:
       arch: arm64
       script:
         - make check
+    - name: Windows
+      os: windows
+      dist: bionic
+      arch: arm64
+      script:
+        - unset CC
+        - VCVARSALL="C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+        - echo "call \"$VCVARSALL\" x64 && nmake -f Makefile.win32 clean check" | cmd.exe
+        - cp tests/test-prog.exe tests/test-prog-64.exe
+        - echo "call \"$VCVARSALL\" x86 && nmake -f Makefile.win32 clean check" | cmd.exe
+        - cd tests && ./test-prog-64.exe

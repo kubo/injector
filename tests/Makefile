@@ -8,7 +8,7 @@ ifneq ($(wildcard /usr/bin/x86_64-linux-gnu-gcc),)
     BUILD_TARGETS += i386
   endif
   ifneq ($(wildcard /usr/lib/gcc/x86_64-linux-gnu/*/x32/libgcc.a),)
-    BUILD_TARGETS += x32
+#    BUILD_TARGETS += x32
   endif
 endif
 

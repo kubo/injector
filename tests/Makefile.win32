@@ -1,0 +1,16 @@
+all: test-prog.exe test-target.exe test-library.dll
+
+check: all
+	.\test-prog.exe
+
+test-prog.exe: test-prog.c ..\src\windows\injector-static.lib
+	$(CC) /MD /Fetest-prog.exe test-prog.c ..\src\windows\injector-static.lib
+
+test-target.exe: test-target.c
+	$(CC) /MD /Fetest-target.exe test-target.c /link /DEF:test-target.def
+
+test-library.dll: test-library.c
+	$(CC) /LD /MD /Fetest-library.dll test-library.c
+
+clean:
+	del test-target.exe test-target.exp test-target.obj test-target.lib test-prog.exe test-prog.obj test-library.dll test-library.obj

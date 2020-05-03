@@ -1,5 +1,7 @@
 # Injector
 
+[![Build Status](https://travis-ci.org/kubo/injector.svg?branch=master)](https://travis-ci.org/kubo/injector)
+
 **Library for injecting a shared library into a Linux or Windows process**
 
 ## Linux
@@ -109,28 +111,30 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
 injector process \ target process | x86_64 | i386 | x32(*1)
 ---|---|---|---
-**x86_64** | success | success | success
-**i386**   | failure(*2) | success | failure(*3)
-**x32**(*1) | failure(*2) | success | failure(*3)
+**x86_64** | success(*4) | success(*4) | success(*4)
+**i386**   | failure(*2) | success(*4) | failure(*3)
+**x32**(*1) | failure(*2) | success(*4) | failure(*3)
 
 injector process \ target process | arm64 | armhf | armel
 ---|---|---|---
-**arm64** | success | success | success
+**arm64** | success(*4) | success | success
 **armhf** | failure(*2) | success | success
 **armel** | failure(*2) | success | success
 
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
+*4: tested on travis-ci  
 
 ## Windows
 
 injector process \ target process | x64 | 32-bit
 ---|---|---
-**x64**     | success     | success
-**32-bit**  | failure(*1) | success
+**x64**     | success(*2) | success(*2)
+**32-bit**  | failure(*1) | success(*2)
 
 *1: failure with `64-bit target process isn't supported by 32-bit process`.  
+*2: tested on travis-ci  
 
 # Caveats
 

@@ -74,6 +74,27 @@ static const char code64_template[] =
 #define CODE64_SIZE          0x0030
 #endif
 
+#ifdef _M_ARM64
+static const unsigned int code64_template[] = {
+    /* 0000:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
+    /* 0004:     */ 0x58000129, //  ldr   x9,$ADDR_LoadLibraryW
+    /* 0008:     */ 0xD63F0120, //  blr   x9
+    /* 000C:     */ 0xB4000060, //  cbz   x0,$L1
+    /* 0010:     */ 0x52800000, //  mov   w0,#0
+    /* 0014:     */ 0x14000003, //  b     $L2
+    /* 0018: L1: */ 0x580000C9, //  ldr   x9,$ADDR_GetLastError
+    /* 001C:     */ 0xD63F0120, //  blr   x9
+    /* 0020: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
+    /* 0024:     */ 0xD65F03C0, //  ret
+    /* literal pool */
+#define ADDR_LoadLibraryW  0x0028
+    /* 0028:     */ 0, 0,
+#define ADDR_GetLastError  0x0030
+    /* 0030:     */ 0, 0
+};
+#define CODE64_SIZE          0x0038
+#endif
+
 #if defined(_M_AMD64) || defined(_M_IX86)
 static const char code32_template[] =
     /* 0000:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
@@ -310,6 +331,13 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     }
 
     IsWow64Process(injector->hProcess, &is_wow64_proc);
+#ifdef _M_ARM64
+    if (is_wow64_proc) {
+        set_errmsg("32-bit target process isn't supported by ARM64 process.");
+        rv = INJERR_UNSUPPORTED_TARGET;
+        goto error_exit;
+    }
+#endif
 #ifdef _M_IX86
     if (!is_wow64_proc) {
         IsWow64Process(GetCurrentProcess(), &is_wow64_proc);
@@ -346,6 +374,11 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         *(size_t*)(code + ADDR_LoadLibraryW) = func_LoadLibraryW;
         *(size_t*)(code + ADDR_GetLastError) = func_GetLastError;
     }
+#endif
+#ifdef _M_ARM64
+    memcpy(code, code64_template, CODE64_SIZE);
+    *(size_t*)(code + ADDR_LoadLibraryW) = func_LoadLibraryW;
+    *(size_t*)(code + ADDR_GetLastError) = func_GetLastError;
 #endif
 #ifdef _M_IX86
     memcpy(code, code32_template, CODE32_SIZE);

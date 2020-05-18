@@ -36,6 +36,16 @@
 #endif
 #include "../include/injector.h"
 
+#ifdef _WIN32
+#define EXEEXT ".exe"
+#define DLLEXT ".dll"
+#define INJECT_ERRMSG "LoadLibrary in the target process failed: The specified module could not be found."
+#else
+#define EXEEXT ""
+#define DLLEXT ".so"
+#define INJECT_ERRMSG "dlopen failed"
+#endif
+
 typedef struct process process_t;
 
 static int process_start(process_t *proc, char *test_target);
@@ -192,6 +202,7 @@ int main(int argc, char **argv)
     injector_t *injector;
     process_t proc;
     void *handle = NULL;
+    const char *errmsg;
     int rv = 1;
 
     if (argc > 1) {
@@ -199,13 +210,8 @@ int main(int argc, char **argv)
         suffix[sizeof(suffix) - 1] = '\0';
     }
 
-#ifdef _WIN32
-    snprintf(test_target, sizeof(test_target), ".\\test-target%s.exe", suffix);
-    snprintf(test_library, sizeof(test_library), ".\\test-library%s.dll", suffix);
-#else
-    snprintf(test_target, sizeof(test_target), "./test-target%s", suffix);
-    snprintf(test_library, sizeof(test_library), "./test-library%s.so", suffix);
-#endif
+    snprintf(test_target, sizeof(test_target), "test-target%s" EXEEXT, suffix);
+    snprintf(test_library, sizeof(test_library), "test-library%s" DLLEXT, suffix);
 
     if (process_start(&proc, test_target) != 0) {
         return 1;
@@ -228,6 +234,16 @@ int main(int argc, char **argv)
     }
     printf("injected. (handle=%p)\n", handle);
     fflush(stdout);
+
+    if (injector_inject(injector, "Makefile", &handle) == 0) {
+        printf("injection should fail but succeeded:\n");
+        goto cleanup;
+    }
+    errmsg = injector_error();
+    if (strcmp(errmsg, INJECT_ERRMSG) != 0) {
+      printf("unexpected injection error message: %s\n", errmsg);
+      goto cleanup;
+    }
 
     if (injector_detach(injector) != 0) {
         printf("inject error:\n  %s\n", injector_error());

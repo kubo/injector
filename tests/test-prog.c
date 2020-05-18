@@ -191,6 +191,7 @@ int main(int argc, char **argv)
     char test_library[64];
     injector_t *injector;
     process_t proc;
+    void *handle = NULL;
     int rv = 1;
 
     if (argc > 1) {
@@ -221,11 +222,11 @@ int main(int argc, char **argv)
     printf("attached.\n");
     fflush(stdout);
 
-    if (injector_inject(injector, test_library) != 0) {
+    if (injector_inject(injector, test_library, &handle) != 0) {
         printf("inject error:\n  %s\n", injector_error());
         goto cleanup;
     }
-    printf("injected.\n");
+    printf("injected. (handle=%p)\n", handle);
     fflush(stdout);
 
     if (injector_detach(injector) != 0) {

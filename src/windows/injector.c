@@ -45,9 +45,12 @@ static size_t func_LoadLibraryW;
 static size_t func_GetLastError;
 static char errmsg[512];
 
+// extern HMODULE load_address;
 // DWORD load_library(const wchar_t *path)
 // {
-//    if (LoadLibraryW(path) != NULL) {
+//    HMODULE hMod = LoadLibraryW(path);
+//    if (hMod != NULL) {
+//        load_address = hMod;
 //        return 0;
 //    } else {
 //        return GetLastError();
@@ -55,60 +58,77 @@ static char errmsg[512];
 // }
 #ifdef _M_AMD64
 static const char code64_template[] =
-    /* 0000:     */ "\x48\x83\xEC\x28"          // sub  rsp,28h
-    /* 0004:     */ "\xFF\x15\x16\x00\x00\x00"  // call LoadLibraryW
-    //                       ^^^^^^^^^^^^^^^^0x00000016 = 0x0020 - (0x0004 + 6)
-    /* 000A:     */ "\x48\x85\xC0"              // test rax,rax
-    /* 000D:     */ "\x74\x04"                  // je   L1
-    /* 000F:     */ "\x33\xC0"                  // xor  eax,eax
-    /* 0011:     */ "\xEB\x06"                  // jmp  L2
-    /* 0013: L1: */ "\xFF\x15\x0F\x00\x00\x00"  // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x0000000F = 0x0028 - (0x0013 + 6)
-    /* 0019: L2: */ "\x48\x83\xC4\x28"          // add  rsp,28h
-    /* 001D:     */ "\xC3"                      // ret
-    /* 001E:     */ "\x90\x90"                  // 2 * nop
-#define ADDR_LoadLibraryW  0x0020
-    /* 0020:     */ "12345678"
-#define ADDR_GetLastError  0x0028
-    /* 0028:     */ "12345678";
-#define CODE64_SIZE          0x0030
+    // ---------- call LoadLibraryW ----------
+    /* 0000:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
+    /* 0004:     */ "\xFF\x15\x2E\x00\x00\x00"     // call LoadLibraryW
+    //                       ^^^^^^^^^^^^^^^^0x0000002e = ADDR64_LoadLibraryW - (0x0004 + 6)
+    /* 000A:     */ "\x48\x85\xC0"                 // test rax,rax
+    /* 000D:     */ "\x74\x0B"                     // je   L1
+    /* 000F:     */ "\x48\x89\x05\xEA\x0F\x00\x00" // mov  [load_address], rax
+    //                           ^^^^^^^^^^^^^^^^0x00000fea = 0x1000 - (0x000F + 7)
+    /* 0016:     */ "\x33\xC0"                     // xor  eax,eax
+    /* 0018:     */ "\xEB\x06"                     // jmp  L2
+    /* 001A: L1: */ "\xFF\x15\x20\x00\x00\x00"     // call GetLastError
+    //                       ^^^^^^^^^^^^^^^^0x00000020 = ADDR64_GetLastError - (0x001A + 6)
+    /* 0020: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
+    /* 0024:     */ "\xC3"                         // ret
+
+    // ---------- padding ----------
+    /* 0035:     */ "\x90\x90\x90"
+
+    // ---------- literal pool ----------
+#define ADDR64_LoadLibraryW  0x0038
+    /* 0038:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define ADDR64_GetLastError  0x0040
+    /* 0040:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+    ;
+
+#define CODE64_SIZE          0x0048
 #endif
 
 #ifdef _M_ARM64
 static const unsigned int code64_template[] = {
+    // ---------- call LoadLibraryW ----------
     /* 0000:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0004:     */ 0x58000129, //  ldr   x9,$ADDR_LoadLibraryW
+    /* 0004:     */ 0x58000169, //  ldr   x9,$ADDR_LoadLibraryW
     /* 0008:     */ 0xD63F0120, //  blr   x9
-    /* 000C:     */ 0xB4000060, //  cbz   x0,$L1
-    /* 0010:     */ 0x52800000, //  mov   w0,#0
-    /* 0014:     */ 0x14000003, //  b     $L2
-    /* 0018: L1: */ 0x580000C9, //  ldr   x9,$ADDR_GetLastError
-    /* 001C:     */ 0xD63F0120, //  blr   x9
-    /* 0020: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
-    /* 0024:     */ 0xD65F03C0, //  ret
-    /* literal pool */
-#define ADDR_LoadLibraryW  0x0028
-    /* 0028:     */ 0, 0,
-#define ADDR_GetLastError  0x0030
-    /* 0030:     */ 0, 0
+    /* 000C:     */ 0xB40000A0, //  cbz   x0,$L1
+    /* 0010:     */ 0xB0000001, //  adrp  x1, #0x1000
+    /* 0014:     */ 0xF9000020, //  str   x0, [x1]
+    /* 0018:     */ 0x52800000, //  mov   w0,#0
+    /* 001C:     */ 0x14000003, //  b     $L2
+    /* 0020: L1: */ 0x580000C9, //  ldr   x9,$ADDR_GetLastError
+    /* 0024:     */ 0xD63F0120, //  blr   x9
+    /* 0028: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
+    /* 002C:     */ 0xD65F03C0, //  ret
+
+    // ---------- literal pool ----------
+#define ADDR_LoadLibraryW    0x0030
+    /* 0030:     */ 0, 0,
+#define ADDR_GetLastError    0x0038
+    /* 0038:     */ 0, 0
 };
-#define CODE64_SIZE          0x0038
+#define CODE64_SIZE          0x0040
 #endif
 
 #if defined(_M_AMD64) || defined(_M_IX86)
 static const char code32_template[] =
+    // ---------- call LoadLibraryW ----------
     /* 0000:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define CALL_LoadLibraryW  0x0004
+#define CALL_LoadLibraryW    0x0004
     /* 0004:     */ "\xE8\x00\x00\x00\x00"      // call LoadLibraryW@4
     /* 0009:     */ "\x85\xC0"                  // test eax,eax
-    /* 000B:     */ "\x74\x04"                  // je   L1
-    /* 000D:     */ "\x33\xC0"                  // xor  eax,eax
-    /* 000F:     */ "\xEB\x05"                  // jmp  L2
-#define CALL_GetLastError  0x0011
-    /* 0011: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
-    /* 0016: L2: */ "\xC2\x04\x00"              // ret  4
-    /* 0019:     */ "\x90\x90\x90";             // 3 * nop
-#define CODE32_SIZE          0x001C
+    /* 000B:     */ "\x74\x09"                  // je   L1
+#define MOV_EAX  0x000D
+    /* 000D:     */ "\xA3\x00\x00\x00\x00"      // mov  dword ptr [load_address], eax
+    /* 0012:     */ "\x33\xC0"                  // xor  eax,eax
+    /* 0014:     */ "\xEB\x05"                  // jmp  L2
+#define CALL_GetLastError    0x0016
+    /* 0016: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
+    /* 001B: L2: */ "\xC2\x04\x00"              // ret  4
+    ;
+
+#define CODE32_SIZE          0x001E
 #endif
 
 #ifdef _WIN64
@@ -298,15 +318,22 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         PROCESS_QUERY_LIMITED_INFORMATION | /* for IsWow64Process() */
         PROCESS_CREATE_THREAD |  /* for CreateRemoteThread() */
         PROCESS_VM_OPERATION  |  /* for VirtualAllocEx() */
+        PROCESS_VM_READ       |  /* for ReadProcessMemory() */
         PROCESS_VM_WRITE;        /* for WriteProcessMemory() */
     BOOL is_wow64_proc;
+    DWORD old_protect;
     SIZE_T written;
     int rv;
     char code[CODE_SIZE];
+    size_t code_size;
+    size_t load_library, get_last_error;
 
     if (page_size == 0) {
         init();
     }
+
+    load_library = func_LoadLibraryW;
+    get_last_error = func_GetLastError;
 
     injector = calloc(1, sizeof(injector_t));
     if (injector == NULL) {
@@ -349,43 +376,49 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         }
     }
 #endif
-    injector->remote_mem = VirtualAllocEx(injector->hProcess, NULL, page_size,
+    injector->remote_mem = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
                                           MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READ);
     if (injector->remote_mem == NULL) {
         set_errmsg("VirtualAllocEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
     }
+    if (!VirtualProtectEx(injector->hProcess, injector->remote_mem + page_size, page_size, PAGE_READWRITE, &old_protect)) {
+        set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
+        rv = INJERR_OTHER;
+        goto error_exit;
+    }
 #ifdef _M_AMD64
     if (is_wow64_proc) {
-        /* 32-bit process */
-        size_t load_library, get_last_error;
         rv = funcaddr(pid, &load_library, &get_last_error);
         if (rv != 0) {
             goto error_exit;
         }
+#endif
+#if defined(_M_AMD64) || defined(_M_IX86)
+        /* 32-bit x86 process */
         memcpy(code, code32_template, CODE32_SIZE);
-        memset(code + CODE32_SIZE, 0x90, CODE_SIZE - CODE32_SIZE);
-        *(unsigned int*)(code + CALL_LoadLibraryW + 1) = (unsigned int)(load_library - ((size_t)injector->remote_mem + CALL_LoadLibraryW + 5));
-        *(unsigned int*)(code + CALL_GetLastError + 1) = (unsigned int)(get_last_error - ((size_t)injector->remote_mem + CALL_GetLastError + 5));
+        code_size = CODE32_SIZE;
+        *(unsigned int*)(code + CALL_LoadLibraryW + 1) = load_library - ((unsigned int)(size_t)injector->remote_mem + CALL_LoadLibraryW + 5);
+        *(unsigned int*)(code + MOV_EAX + 1) = (unsigned int)(size_t)injector->remote_mem + page_size;
+        *(unsigned int*)(code + CALL_GetLastError + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError + 5);
+#endif
+#ifdef _M_AMD64
     } else {
-        /* 64-bit process */
+        /* 64-bit x64 process */
         memcpy(code, code64_template, CODE64_SIZE);
-        *(size_t*)(code + ADDR_LoadLibraryW) = func_LoadLibraryW;
-        *(size_t*)(code + ADDR_GetLastError) = func_GetLastError;
+        code_size = CODE64_SIZE;
+        *(size_t*)(code + ADDR64_LoadLibraryW) = load_library;
+        *(size_t*)(code + ADDR64_GetLastError) = get_last_error;
     }
 #endif
 #ifdef _M_ARM64
     memcpy(code, code64_template, CODE64_SIZE);
-    *(size_t*)(code + ADDR_LoadLibraryW) = func_LoadLibraryW;
-    *(size_t*)(code + ADDR_GetLastError) = func_GetLastError;
+    code_size = CODE64_SIZE;
+    *(size_t*)(code + ADDR_LoadLibraryW) = load_library;
+    *(size_t*)(code + ADDR_GetLastError) = get_last_error;
 #endif
-#ifdef _M_IX86
-    memcpy(code, code32_template, CODE32_SIZE);
-    *(size_t*)(code + CALL_LoadLibraryW + 1) = func_LoadLibraryW - ((size_t)injector->remote_mem + CALL_LoadLibraryW + 5);
-    *(size_t*)(code + CALL_GetLastError + 1) = func_GetLastError - ((size_t)injector->remote_mem + CALL_GetLastError + 5);
-#endif
-    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem, code, CODE_SIZE, &written)) {
+    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem, code, code_size, &written)) {
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
@@ -397,7 +430,7 @@ error_exit:
     return rv;
 }
 
-int injector_inject(injector_t *injector, const char *path)
+int injector_inject(injector_t *injector, const char *path, void **handle)
 {
     DWORD pathlen = (DWORD)strlen(path);
     wchar_t *wpath;
@@ -415,18 +448,21 @@ int injector_inject(injector_t *injector, const char *path)
     wpath = _alloca((pathlen + 1) * sizeof(wchar_t));
     wpathlen = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, path, pathlen, wpath, pathlen + 1);
     wpath[wpathlen] = L'\0';
-    return injector_inject_w(injector, wpath);
+    return injector_inject_w(injector, wpath, handle);
 }
 
-int injector_inject_w(injector_t *injector, const wchar_t *path)
+int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
 {
-    wchar_t fullpath[MAX_PATH];
+    struct {
+        void *load_address;
+        wchar_t fullpath[MAX_PATH];
+    } data = {NULL,};
     DWORD pathlen;
     SIZE_T written;
     HANDLE hThread;
     DWORD err;
 
-    pathlen = GetFullPathNameW(path, MAX_PATH, fullpath, NULL);
+    pathlen = GetFullPathNameW(path, MAX_PATH, data.fullpath, NULL);
     if (pathlen > MAX_PATH) {
         set_errmsg("too long file path: %S", path);
         return INJERR_FILE_NOT_FOUND;
@@ -435,11 +471,11 @@ int injector_inject_w(injector_t *injector, const wchar_t *path)
         set_errmsg("failed to get the full path: %S", path);
         return INJERR_FILE_NOT_FOUND;
     }
-    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem + CODE_SIZE, fullpath, (pathlen + 1) * sizeof(wchar_t), &written)) {
+    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(data), &written)) {
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
     }
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->remote_mem, injector->remote_mem + CODE_SIZE, 0, NULL);
+    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->remote_mem, injector->remote_mem + page_size + sizeof(void*), 0, NULL);
     if (hThread == NULL) {
         set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
@@ -450,6 +486,13 @@ int injector_inject_w(injector_t *injector, const wchar_t *path)
     if (err != 0) {
         set_errmsg("LoadLibrary in the target process failed: %s", w32strerr(err));
         return INJERR_ERROR_IN_TARGET;
+    }
+    if (!ReadProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(void *), &written)) {
+        set_errmsg("ReadProcessMemory error: %s", w32strerr(GetLastError()));
+        return INJERR_OTHER;
+    }
+    if (handle != NULL) {
+        *handle = data.load_address;
     }
     return 0;
 }
@@ -502,8 +545,10 @@ static const char *w32strerr(DWORD err)
             }
         }
         errmsg[len] = '\0';
-    } else {
+    } else if ((int)err >= 0) {
         sprintf(errmsg, "win32 error code %d", err);
+    } else {
+        sprintf(errmsg, "win32 error code 0x%x", err);
     }
     return errmsg;
 }

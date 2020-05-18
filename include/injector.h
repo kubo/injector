@@ -58,6 +58,7 @@ typedef struct injector injector_t;
 
 int injector_attach(injector_t **injector, injector_pid_t pid);
 int injector_inject(injector_t *injector, const char *path, void **handle);
+int injector_uninject(injector_t *injector, void *handle);
 int injector_detach(injector_t *injector);
 const char *injector_error(void);
 

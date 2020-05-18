@@ -150,6 +150,24 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     return 0;
 }
 
+int injector_uninject(injector_t *injector, void *handle)
+{
+    int rv;
+    long retval;
+
+    injector__errmsg_is_set = 0;
+
+    rv = injector__call_function(injector, &retval, injector->dlclose_addr, handle);
+    if (rv != 0) {
+        return rv;
+    }
+    if (retval != 0) {
+        injector__set_errmsg("dlclose failed");
+        return INJERR_ERROR_IN_TARGET;
+    }
+    return 0;
+}
+
 int injector_detach(injector_t *injector)
 {
     injector__errmsg_is_set = 0;

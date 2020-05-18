@@ -36,10 +36,14 @@
 #endif
 #include "../include/injector.h"
 
+#define INCR_ON_INJECTION 13
+#define INCR_ON_UNINJECTION 17
+
 #ifdef _WIN32
 #define EXEEXT ".exe"
 #define DLLEXT ".dll"
 #define INJECT_ERRMSG "LoadLibrary in the target process failed: The specified module could not be found."
+#define UNINJECT_ERRMSG "FreeLibrary in the target process failed: The specified module could not be found."
 #else
 #define EXEEXT ""
 #define DLLEXT ".so"
@@ -86,12 +90,15 @@ static int process_wait(process_t *proc, int wait_secs)
     case WAIT_OBJECT_0:
         GetExitCodeProcess(proc->hProcess, &code);
         switch (code) {
-        case 123:
-            printf("SUCCESS: The injected library changed the exit_value variable in the targe process!\n");
+        case INCR_ON_INJECTION + INCR_ON_UNINJECTION:
+            printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
             rv = 0;
             break;
+        case INCR_ON_INJECTION:
+            printf("ERROR: The library was injected but not uninjected.\n");
+            break;
         case 0:
-            printf("ERROR: The injected library didn't change the return value of targe process!\n");
+            printf("ERROR: The injected library didn't change the return value of target process!\n");
             break;
         default:
             printf("ERROR: The target process exited with exit code %d.\n", code);
@@ -153,11 +160,14 @@ static int process_wait(process_t *proc, int wait_secs)
         proc->waited = 1;
         if (WIFEXITED(status)) {
             int exitcode = WEXITSTATUS(status);
-            if (exitcode == 123) {
-                printf("SUCCESS: The injected library changed the exit_value variable in the targe process!\n");
+            if (exitcode == INCR_ON_INJECTION + INCR_ON_UNINJECTION) {
+                printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
                 return 0;
+            } else if (exitcode == INCR_ON_INJECTION) {
+                printf("ERROR: The library was injected but not uninjected.\n");
+                return 1;
             } else if (exitcode == 0) {
-                printf("ERROR: The injected library didn't change the return value of targe process!\n");
+                printf("ERROR: The injected library didn't change the return value of target process!\n");
                 return 1;
             } else {
                 printf("ERROR: The target process exited with exit code %d.\n", exitcode);
@@ -202,8 +212,8 @@ int main(int argc, char **argv)
     injector_t *injector;
     process_t proc;
     void *handle = NULL;
-    const char *errmsg;
     int rv = 1;
+    int loop_cnt;
 
     if (argc > 1) {
         snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
@@ -221,36 +231,61 @@ int main(int argc, char **argv)
 
     sleep(1);
 
-    if (injector_attach(&injector, proc.pid) != 0) {
-        printf("inject error:\n  %s\n", injector_error());
-        goto cleanup;
-    }
-    printf("attached.\n");
-    fflush(stdout);
+    for (loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
+        const char *errmsg;
 
-    if (injector_inject(injector, test_library, &handle) != 0) {
-        printf("inject error:\n  %s\n", injector_error());
-        goto cleanup;
-    }
-    printf("injected. (handle=%p)\n", handle);
-    fflush(stdout);
+        if (injector_attach(&injector, proc.pid) != 0) {
+            printf("inject error:\n  %s\n", injector_error());
+            goto cleanup;
+        }
+        printf("attached.\n");
+        fflush(stdout);
 
-    if (injector_inject(injector, "Makefile", &handle) == 0) {
-        printf("injection should fail but succeeded:\n");
-        goto cleanup;
-    }
-    errmsg = injector_error();
-    if (strcmp(errmsg, INJECT_ERRMSG) != 0) {
-      printf("unexpected injection error message: %s\n", errmsg);
-      goto cleanup;
-    }
+        if (loop_cnt == 0) {
+            if (injector_inject(injector, test_library, &handle) != 0) {
+                printf("inject error:\n  %s\n", injector_error());
+                goto cleanup;
+            }
+            printf("injected. (handle=%p)\n", handle);
+            fflush(stdout);
 
-    if (injector_detach(injector) != 0) {
-        printf("inject error:\n  %s\n", injector_error());
-        goto cleanup;
+            if (injector_inject(injector, "Makefile", &handle) == 0) {
+                printf("injection should fail but succeeded:\n");
+                goto cleanup;
+            }
+            errmsg = injector_error();
+            if (strcmp(errmsg, INJECT_ERRMSG) != 0) {
+                printf("unexpected injection error message: %s\n", errmsg);
+                goto cleanup;
+            }
+        } else {
+            if (injector_uninject(injector, handle) != 0) {
+                printf("uninject error:\n  %s\n", injector_error());
+                goto cleanup;
+            }
+            printf("uninjected.\n");
+            fflush(stdout);
+
+#ifdef _WIN32
+            if (injector_uninject(injector, NULL) == 0) {
+                printf("uninjection should fail but succeeded:\n");
+                goto cleanup;
+            }
+            errmsg = injector_error();
+            if (strcmp(errmsg, UNINJECT_ERRMSG) != 0) {
+                printf("unexpected uninjection error message: %s\n", errmsg);
+                goto cleanup;
+            }
+#endif
+        }
+
+        if (injector_detach(injector) != 0) {
+            printf("inject error:\n  %s\n", injector_error());
+            goto cleanup;
+        }
+        printf("detached.\n");
+        fflush(stdout);
     }
-    printf("detached.\n");
-    fflush(stdout);
 
     rv = process_wait(&proc, 6);
 cleanup:

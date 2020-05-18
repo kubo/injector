@@ -42,6 +42,7 @@
 
 static DWORD page_size = 0;
 static size_t func_LoadLibraryW;
+static size_t func_FreeLibrary;
 static size_t func_GetLastError;
 static char errmsg[512];
 
@@ -56,59 +57,98 @@ static char errmsg[512];
 //        return GetLastError();
 //    }
 // }
+// DWORD unload_library(HMODULE handle)
+// {
+//    if (FreeLibrary(handle)) {
+//        return 0;
+//    } else {
+//        return GetLastError();
+//    }
+// }
 #ifdef _M_AMD64
 static const char code64_template[] =
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0004:     */ "\xFF\x15\x2E\x00\x00\x00"     // call LoadLibraryW
-    //                       ^^^^^^^^^^^^^^^^0x0000002e = ADDR64_LoadLibraryW - (0x0004 + 6)
+    /* 0004:     */ "\xFF\x15\x3E\x00\x00\x00"     // call LoadLibraryW
+    //                       ^^^^^^^^^^^^^^^^0x0000003e = ADDR64_LoadLibraryW - (0x0004 + 6)
     /* 000A:     */ "\x48\x85\xC0"                 // test rax,rax
     /* 000D:     */ "\x74\x0B"                     // je   L1
     /* 000F:     */ "\x48\x89\x05\xEA\x0F\x00\x00" // mov  [load_address], rax
     //                           ^^^^^^^^^^^^^^^^0x00000fea = 0x1000 - (0x000F + 7)
     /* 0016:     */ "\x33\xC0"                     // xor  eax,eax
     /* 0018:     */ "\xEB\x06"                     // jmp  L2
-    /* 001A: L1: */ "\xFF\x15\x20\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x00000020 = ADDR64_GetLastError - (0x001A + 6)
+    /* 001A: L1: */ "\xFF\x15\x38\x00\x00\x00"     // call GetLastError
+    //                       ^^^^^^^^^^^^^^^^0x00000038 = ADDR64_GetLastError - (0x001A + 6)
     /* 0020: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
     /* 0024:     */ "\xC3"                         // ret
 
-    // ---------- padding ----------
-    /* 0035:     */ "\x90\x90\x90"
+    // ---------- call FreeLibrary ----------
+#define UNINJECTION_CODE64_OFFSET 0x25
+    /* 0025:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
+    /* 0029:     */ "\xFF\x15\x21\x00\x00\x00"     // call FreeLibrary
+    //                       ^^^^^^^^^^^^^^^^0x00000021 = ADDR64_FreeLibrary - (0x0029 + 6)
+    /* 002F:     */ "\x85\xC0"                     // test eax,eax
+    /* 0031:     */ "\x74\x04"                     // je   L1
+    /* 0033:     */ "\x33\xC0"                     // xor  eax,eax
+    /* 0035:     */ "\xEB\x06"                     // jmp  L2
+    /* 0037: L1: */ "\xFF\x15\x1B\x00\x00\x00"     // call GetLastError
+    //                       ^^^^^^^^^^^^^^^^0x0000001B = ADDR64_GetLastError - (0x0037 + 6)
+    /* 003D: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
+    /* 0041:     */ "\xC3"                         // ret
+
+    // padding
+    /* 0042:     */ "\x90\x90\x90\x90\x90\x90"
 
     // ---------- literal pool ----------
-#define ADDR64_LoadLibraryW  0x0038
-    /* 0038:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define ADDR64_GetLastError  0x0040
-    /* 0040:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define ADDR64_LoadLibraryW  0x0048
+    /* 0048:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define ADDR64_FreeLibrary   0x0050
+    /* 0050:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define ADDR64_GetLastError  0x0058
+    /* 0058:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
     ;
 
-#define CODE64_SIZE          0x0048
+#define CODE64_SIZE          0x0060
 #endif
 
 #ifdef _M_ARM64
 static const unsigned int code64_template[] = {
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0004:     */ 0x58000169, //  ldr   x9,$ADDR_LoadLibraryW
+    /* 0004:     */ 0x580002A9, //  ldr   x9,$ADDR_LoadLibraryW
     /* 0008:     */ 0xD63F0120, //  blr   x9
     /* 000C:     */ 0xB40000A0, //  cbz   x0,$L1
     /* 0010:     */ 0xB0000001, //  adrp  x1, #0x1000
     /* 0014:     */ 0xF9000020, //  str   x0, [x1]
     /* 0018:     */ 0x52800000, //  mov   w0,#0
     /* 001C:     */ 0x14000003, //  b     $L2
-    /* 0020: L1: */ 0x580000C9, //  ldr   x9,$ADDR_GetLastError
+    /* 0020: L1: */ 0x58000249, //  ldr   x9,$ADDR_GetLastError
     /* 0024:     */ 0xD63F0120, //  blr   x9
     /* 0028: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
     /* 002C:     */ 0xD65F03C0, //  ret
 
+    // ---------- call FreeLibrary ----------
+#define UNINJECTION_CODE_OFFSET 0x0030
+    /* 0030:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
+    /* 0034:     */ 0x58000169, //  ldr   x9,$ADDR_FreeLibrary
+    /* 0038:     */ 0xD63F0120, //  blr   x9
+    /* 003C:     */ 0xB4000060, //  cbz   x0,$L1
+    /* 0040:     */ 0x52800000, //  mov   w0,#0
+    /* 0044:     */ 0x14000003, //  b     $L2
+    /* 0048: L1: */ 0x58000109, //  ldr   x9,$ADDR_GetLastError
+    /* 004C:     */ 0xD63F0120, //  blr   x9
+    /* 0050: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
+    /* 0054:     */ 0xD65F03C0, //  ret
+
     // ---------- literal pool ----------
-#define ADDR_LoadLibraryW    0x0030
-    /* 0030:     */ 0, 0,
-#define ADDR_GetLastError    0x0038
-    /* 0038:     */ 0, 0
+#define ADDR_LoadLibraryW    0x0058
+    /* 0058:     */ 0, 0,
+#define ADDR_FreeLibrary     0x0060
+    /* 0060:     */ 0, 0,
+#define ADDR_GetLastError    0x0068
+    /* 0068:     */ 0, 0
 };
-#define CODE64_SIZE          0x0040
+#define CODE64_SIZE          0x0070
 #endif
 
 #if defined(_M_AMD64) || defined(_M_IX86)
@@ -123,12 +163,25 @@ static const char code32_template[] =
     /* 000D:     */ "\xA3\x00\x00\x00\x00"      // mov  dword ptr [load_address], eax
     /* 0012:     */ "\x33\xC0"                  // xor  eax,eax
     /* 0014:     */ "\xEB\x05"                  // jmp  L2
-#define CALL_GetLastError    0x0016
+#define CALL_GetLastError1   0x0016
     /* 0016: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
     /* 001B: L2: */ "\xC2\x04\x00"              // ret  4
+
+    // ---------- call FreeLibrary ----------
+#define UNINJECTION_CODE_OFFSET 0x001E
+    /* 001E:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
+#define CALL_FreeLibrary     0x0022
+    /* 0022:     */ "\xE8\x00\x00\x00\x00"      // call FreeLibrary@4
+    /* 0027:     */ "\x85\xC0"                  // test eax,eax
+    /* 0029:     */ "\x74\x04"                  // je   L1
+    /* 002B:     */ "\x33\xC0"                  // xor  eax,eax
+    /* 002D:     */ "\xEB\x05"                  // jmp  L2
+#define CALL_GetLastError2   0x002F
+    /* 002F: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
+    /* 0034: L2: */ "\xC2\x04\x00"              // ret  4
     ;
 
-#define CODE32_SIZE          0x001E
+#define CODE32_SIZE          0x0037
 #endif
 
 #ifdef _WIN64
@@ -143,6 +196,7 @@ static const char *w32strerr(DWORD err);
 struct injector {
     HANDLE hProcess;
     char *remote_mem;
+    char *uninjection_code;
 };
 
 static BOOL init(void)
@@ -156,6 +210,7 @@ static BOOL init(void)
     GetSystemInfo(&si);
     page_size = si.dwPageSize;
     func_LoadLibraryW = (size_t)GetProcAddress(kernel32, "LoadLibraryW");
+    func_FreeLibrary = (size_t)GetProcAddress(kernel32, "FreeLibrary");
     func_GetLastError = (size_t)GetProcAddress(kernel32, "GetLastError");
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken)) {
@@ -185,7 +240,7 @@ static int cmp_func(const void *context, const void *key, const void *datum)
     return strcmp(k, d);
 }
 
-static int funcaddr(DWORD pid, size_t *load_library, size_t *get_last_error)
+static int funcaddr(DWORD pid, size_t *load_library, size_t *free_library, size_t *get_last_error)
 {
     HANDLE hSnapshot;
     MODULEENTRY32W me;
@@ -289,6 +344,14 @@ retry:
     }
     *load_library = (size_t)me.modBaseAddr + funcs[ordinals[name - names]];
 
+    /* Find the address of FreeLibrary */
+    name = bsearch_s((void*)"FreeLibrary", names, exp->NumberOfNames, sizeof(DWORD), cmp_func, (void*)rva_to_va);
+    if (name == NULL) {
+        set_errmsg("Could not find the address of FreeLibrary");
+        goto exit;
+    }
+    *free_library = (size_t)me.modBaseAddr + funcs[ordinals[name - names]];
+
     /* Find the address of GetLastError */
     name = bsearch_s((void*)"GetLastError", names, exp->NumberOfNames, sizeof(DWORD), cmp_func, (void*)rva_to_va);
     if (name == NULL) {
@@ -326,13 +389,14 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     int rv;
     char code[CODE_SIZE];
     size_t code_size;
-    size_t load_library, get_last_error;
+    size_t load_library, free_library, get_last_error;
 
     if (page_size == 0) {
         init();
     }
 
     load_library = func_LoadLibraryW;
+    free_library = func_FreeLibrary;
     get_last_error = func_GetLastError;
 
     injector = calloc(1, sizeof(injector_t));
@@ -383,6 +447,8 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         rv = INJERR_OTHER;
         goto error_exit;
     }
+    injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
+
     if (!VirtualProtectEx(injector->hProcess, injector->remote_mem + page_size, page_size, PAGE_READWRITE, &old_protect)) {
         set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
@@ -390,7 +456,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     }
 #ifdef _M_AMD64
     if (is_wow64_proc) {
-        rv = funcaddr(pid, &load_library, &get_last_error);
+        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
         if (rv != 0) {
             goto error_exit;
         }
@@ -401,7 +467,9 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         code_size = CODE32_SIZE;
         *(unsigned int*)(code + CALL_LoadLibraryW + 1) = load_library - ((unsigned int)(size_t)injector->remote_mem + CALL_LoadLibraryW + 5);
         *(unsigned int*)(code + MOV_EAX + 1) = (unsigned int)(size_t)injector->remote_mem + page_size;
-        *(unsigned int*)(code + CALL_GetLastError + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError + 5);
+        *(unsigned int*)(code + CALL_GetLastError1 + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError1 + 5);
+        *(unsigned int*)(code + CALL_FreeLibrary + 1) = free_library - ((unsigned int)(size_t)injector->remote_mem + CALL_FreeLibrary + 5);
+        *(unsigned int*)(code + CALL_GetLastError2 + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError2 + 5);
 #endif
 #ifdef _M_AMD64
     } else {
@@ -409,13 +477,16 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         memcpy(code, code64_template, CODE64_SIZE);
         code_size = CODE64_SIZE;
         *(size_t*)(code + ADDR64_LoadLibraryW) = load_library;
+        *(size_t*)(code + ADDR64_FreeLibrary) = free_library;
         *(size_t*)(code + ADDR64_GetLastError) = get_last_error;
+        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE64_OFFSET;
     }
 #endif
 #ifdef _M_ARM64
     memcpy(code, code64_template, CODE64_SIZE);
     code_size = CODE64_SIZE;
     *(size_t*)(code + ADDR_LoadLibraryW) = load_library;
+    *(size_t*)(code + ADDR_FreeLibrary) = free_library;
     *(size_t*)(code + ADDR_GetLastError) = get_last_error;
 #endif
     if (!WriteProcessMemory(injector->hProcess, injector->remote_mem, code, code_size, &written)) {
@@ -493,6 +564,26 @@ int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
     }
     if (handle != NULL) {
         *handle = data.load_address;
+    }
+    return 0;
+}
+
+int injector_uninject(injector_t *injector, void *handle)
+{
+    HANDLE hThread;
+    DWORD err;
+
+    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)(injector->uninjection_code), handle, 0, NULL);
+    if (hThread == NULL) {
+        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
+        return INJERR_OTHER;
+    }
+    WaitForSingleObject(hThread, INFINITE);
+    GetExitCodeThread(hThread, &err);
+    CloseHandle(hThread);
+    if (err != 0) {
+        set_errmsg("FreeLibrary in the target process failed: %s", w32strerr(err));
+        return INJERR_ERROR_IN_TARGET;
     }
     return 0;
 }

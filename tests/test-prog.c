@@ -30,9 +30,11 @@
 #include <sys/types.h>
 #ifdef _WIN32
 #include <windows.h>
+#include <tlhelp32.h>
 #else
 #include <sys/wait.h>
 #include <unistd.h>
+#include <limits.h>
 #endif
 #include "../include/injector.h"
 
@@ -53,6 +55,7 @@
 typedef struct process process_t;
 
 static int process_start(process_t *proc, char *test_target);
+static int process_check_module(process_t *proc, const char *module_name);
 static int process_wait(process_t *proc, int wait_secs);
 static void process_terminate(process_t *proc);
 
@@ -78,6 +81,33 @@ static int process_start(process_t *proc, char *test_target)
     proc->pid = pi.dwProcessId;
     proc->hProcess = pi.hProcess;
     return 0;
+}
+
+static int process_check_module(process_t *proc, const char *module_name)
+{
+    HANDLE hSnapshot;
+    MODULEENTRY32 me;
+    BOOL ok;
+
+    do {
+        hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, proc->pid);
+    } while (hSnapshot == INVALID_HANDLE_VALUE && GetLastError() == ERROR_BAD_LENGTH);
+
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        printf("CreateToolhelp32Snapshot error: %d\n", GetLastError());
+        return -1;
+    }
+    me.dwSize = sizeof(me);
+    ok = Module32First(hSnapshot, &me);
+    while (ok) {
+        if (stricmp(me.szModule, module_name) == 0) {
+            CloseHandle(hSnapshot);
+            return 0;
+        }
+        ok = Module32Next(hSnapshot, &me);
+    }
+    CloseHandle(hSnapshot);
+    return 1;
 }
 
 static int process_wait(process_t *proc, int wait_secs)
@@ -144,6 +174,29 @@ static int process_start(process_t *proc, char *test_target)
         exit(2);
     }
     return 0;
+}
+
+static int process_check_module(process_t *proc, const char *module_name)
+{
+    char buf[PATH_MAX];
+    size_t len = strlen(module_name);
+    FILE *fp;
+
+    sprintf(buf, "/proc/%d/maps", proc->pid);
+    fp = fopen(buf, "r");
+    if (fp == NULL) {
+        printf("Could not open %s\n", buf);
+        return -1;
+    }
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        char *p = strrchr(buf, '/');
+        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && p[len + 1] == '\n') {
+            fclose(fp);
+            return 0;
+        }
+    }
+    fclose(fp);
+    return 1;
 }
 
 static int process_wait(process_t *proc, int wait_secs)
@@ -285,6 +338,15 @@ int main(int argc, char **argv)
         }
         printf("detached.\n");
         fflush(stdout);
+
+        if (process_check_module(&proc, test_library) != loop_cnt) {
+            if (loop_cnt == 0) {
+                printf("%s wasn't found after injection\n", test_library);
+            } else {
+                printf("%s was found after uninjection\n", test_library);
+            }
+            goto cleanup;
+        }
     }
 
     rv = process_wait(&proc, 6);

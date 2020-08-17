@@ -29,8 +29,11 @@ technique to load a DLL into another process with some improvements.
 
 1. It gets Win32 error messages when `LoadLibrary` fails by copying assembly
    code into the target process.
-2. It can inject a 32-bit dll into a 32-bit process from 64-bit processes
+2. It can inject a 32-bit dll into a 32-bit process from x64 processes
    by checking the export entries in 32-bit kernel32.dll.
+
+**Note:** It may work on Windows on ARM though I have not tested it because
+I have no ARM machines. Let me know if it really works.
 
 # Compilation
 
@@ -128,13 +131,15 @@ injector process \ target process | arm64 | armhf | armel
 
 ## Windows
 
-injector process \ target process | x64 | 32-bit
----|---|---
-**x64**     | success(*2) | success(*2)
-**32-bit**  | failure(*1) | success(*2)
+injector process \ target process | x64 | 32-bit | ARM
+---|---|---|---
+**x64**     | success(*2) | success(*2) | -
+**32-bit**  | failure(*1) | success(*2) | -
+**ARM**     | -           | -           | not tested(*3)
 
 *1: failure with `64-bit target process isn't supported by 32-bit process`.  
 *2: tested on travis-ci  
+*3: It may work though I have not tested it. Let me know if it really works.
 
 # Caveats
 

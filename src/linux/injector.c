@@ -111,7 +111,7 @@ error_exit:
     return rv;
 }
 
-int injector_inject(injector_t *injector, const char *path)
+int injector_inject(injector_t *injector, const char *path, void **handle)
 {
     char abspath[PATH_MAX];
     size_t len;
@@ -142,6 +142,27 @@ int injector_inject(injector_t *injector, const char *path)
     }
     if (retval == 0) {
         injector__set_errmsg("dlopen failed");
+        return INJERR_ERROR_IN_TARGET;
+    }
+    if (handle != NULL) {
+        *handle = (void*)retval;
+    }
+    return 0;
+}
+
+int injector_uninject(injector_t *injector, void *handle)
+{
+    int rv;
+    long retval;
+
+    injector__errmsg_is_set = 0;
+
+    rv = injector__call_function(injector, &retval, injector->dlclose_addr, handle);
+    if (rv != 0) {
+        return rv;
+    }
+    if (retval != 0) {
+        injector__set_errmsg("dlclose failed");
         return INJERR_ERROR_IN_TARGET;
     }
     return 0;

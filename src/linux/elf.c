@@ -58,6 +58,8 @@ int injector__collect_libc_information(injector_t *injector)
     size_t sym_entsize = 0;
     size_t dlopen_st_name;
     size_t dlopen_offset;
+    size_t dlclose_st_name;
+    size_t dlclose_offset;
     Elf_Sym sym;
     int idx;
     int rv;
@@ -138,7 +140,27 @@ int injector__collect_libc_information(injector_t *injector)
         }
     }
 
+    dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlclose");
+    if (dlclose_st_name == 0) {
+        injector__set_errmsg("failed to find __libc_dlclose in the .dynstr section.");
+        rv = INJERR_NO_FUNCTION;
+        goto cleanup;
+    }
+
+    fseek(fp, sym_offset, SEEK_SET);
+    for (idx = 0; idx < sym_num; idx++) {
+        rv = read_elf_sym(fp, &sym, sym_entsize);
+        if (rv != 0) {
+            goto cleanup;
+        }
+        if (sym.st_name == dlclose_st_name) {
+            dlclose_offset = sym.st_value;
+            break;
+        }
+    }
+
     injector->dlopen_addr = libc_addr + dlopen_offset;
+    injector->dlclose_addr = libc_addr + dlclose_offset;
     injector->code_addr = libc_addr + ehdr.e_entry;
 
     switch (ehdr.e_machine) {

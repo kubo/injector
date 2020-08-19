@@ -72,6 +72,7 @@ struct injector {
     arch_t arch;
     struct user_regs_struct regs;
     size_t dlopen_addr;
+    size_t dlclose_addr;
     size_t code_addr; /* address where instructions are written */
     code_t backup_code;
     long sys_mmap;

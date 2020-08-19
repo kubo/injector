@@ -57,12 +57,13 @@ extern "C" {
 typedef struct injector injector_t;
 
 int injector_attach(injector_t **injector, injector_pid_t pid);
-int injector_inject(injector_t *injector, const char *path);
+int injector_inject(injector_t *injector, const char *path, void **handle);
+int injector_uninject(injector_t *injector, void *handle);
 int injector_detach(injector_t *injector);
 const char *injector_error(void);
 
 #if defined(_WIN32)
-int injector_inject_w(injector_t *injector, const wchar_t *path);
+int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle);
 #endif
 
 #if 0

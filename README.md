@@ -85,6 +85,7 @@ The `nmake` command creates:
 ...
 
     injector_t *injector;
+    void *handle;
 
     /* attach to a process whose process id is 1234. */
     if (injector_attach(&injector, 1234) != 0) {
@@ -92,13 +93,21 @@ The `nmake` command creates:
         return;
     }
     /* inject a shared library into the process. */
-    if (injector_inject(injector, "/path/to/shared/library") != 0) {
+    if (injector_inject(injector, "/path/to/shared/library", NULL) != 0) {
         printf("INJECT ERROR: %s\n", injector_error());
     }
     /* inject another shared library. */
-    if (injector_inject(injector, "/path/to/another/shared/library") != 0) {
+    if (injector_inject(injector, "/path/to/another/shared/library", &handle) != 0) {
         printf("INJECT ERROR: %s\n", injector_error());
     }
+
+...
+
+    /* uninject the second shared library. */
+    if (injector_uninject(injector, handle) != 0) {
+        printf("UNINJECT ERROR: %s\n", injector_error());
+    }
+
     /* cleanup */
     injector_detach(injector);
 ```
@@ -131,11 +140,11 @@ injector process \ target process | arm64 | armhf | armel
 
 ## Windows
 
-injector process \ target process | x64 | 32-bit | ARM
+injector process \ target process | x64 | 32-bit | arm64
 ---|---|---|---
 **x64**     | success(*2) | success(*2) | -
 **32-bit**  | failure(*1) | success(*2) | -
-**ARM**     | -           | -           | not tested(*3)
+**arm64**   | -           | -           | not tested(*3)
 
 *1: failure with `64-bit target process isn't supported by 32-bit process`.  
 *2: tested on travis-ci  

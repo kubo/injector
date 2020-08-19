@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018-2019 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2020 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 #include <stdio.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <malloc.h>
 #include <windows.h>
@@ -39,6 +40,8 @@
 #if !defined(PSAPI_VERSION) || PSAPI_VERSION == 1
 #pragma comment(lib, "psapi.lib")
 #endif
+
+typedef BOOL (WINAPI *IsWow64Process2_t)(HANDLE hProcess, USHORT *pProcessMachine, USHORT *pNativeMachine);
 
 static DWORD page_size = 0;
 static size_t func_LoadLibraryW;
@@ -184,14 +187,23 @@ static const char code32_template[] =
 #define CODE32_SIZE          0x0037
 #endif
 
-#ifdef _WIN64
+#ifdef _M_AMD64
+#define CURRENT_ARCH "x64"
 #define CODE_SIZE CODE64_SIZE
-#else
+#endif
+#ifdef _M_ARM64
+#define CURRENT_ARCH "arm64"
+#define CODE_SIZE CODE64_SIZE
+#endif
+#ifdef _M_IX86
+#define CURRENT_ARCH "x86"
 #define CODE_SIZE CODE32_SIZE
 #endif
 
 static void set_errmsg(const char *format, ...);
 static const char *w32strerr(DWORD err);
+static USHORT process_arch(HANDLE hProcess);
+static const char *arch_name(USHORT arch);
 
 struct injector {
     HANDLE hProcess;
@@ -383,7 +395,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         PROCESS_VM_OPERATION  |  /* for VirtualAllocEx() */
         PROCESS_VM_READ       |  /* for ReadProcessMemory() */
         PROCESS_VM_WRITE;        /* for WriteProcessMemory() */
-    BOOL is_wow64_proc;
+    USHORT arch;
     DWORD old_protect;
     SIZE_T written;
     int rv;
@@ -421,25 +433,33 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         goto error_exit;
     }
 
-    IsWow64Process(injector->hProcess, &is_wow64_proc);
+    arch = process_arch(injector->hProcess);
+    switch (arch) {
+#ifdef _M_AMD64
+    case IMAGE_FILE_MACHINE_AMD64:
+        break;
+    case IMAGE_FILE_MACHINE_I386:
+        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
+        if (rv != 0) {
+            goto error_exit;
+        }
+        break;
+#endif
 #ifdef _M_ARM64
-    if (is_wow64_proc) {
-        set_errmsg("32-bit target process isn't supported by ARM64 process.");
+    case IMAGE_FILE_MACHINE_ARM64:
+        break;
+#endif
+#ifdef _M_IX86
+    case IMAGE_FILE_MACHINE_I386:
+        break;
+#endif
+    default:
+        set_errmsg("%s target process isn't supported by %s process.",
+                   arch_name(arch), CURRENT_ARCH);
         rv = INJERR_UNSUPPORTED_TARGET;
         goto error_exit;
     }
-#endif
-#ifdef _M_IX86
-    if (!is_wow64_proc) {
-        IsWow64Process(GetCurrentProcess(), &is_wow64_proc);
-        if (is_wow64_proc) {
-            /* This process is running on Windows x64. */
-            set_errmsg("64-bit target process isn't supported by 32-bit process.");
-            rv = INJERR_UNSUPPORTED_TARGET;
-            goto error_exit;
-        }
-    }
-#endif
+
     injector->remote_mem = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
                                           MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READ);
     if (injector->remote_mem == NULL) {
@@ -447,48 +467,53 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         rv = INJERR_OTHER;
         goto error_exit;
     }
-    injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
 
     if (!VirtualProtectEx(injector->hProcess, injector->remote_mem + page_size, page_size, PAGE_READWRITE, &old_protect)) {
         set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
     }
+
+    switch (arch) {
 #ifdef _M_AMD64
-    if (is_wow64_proc) {
-        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
-        if (rv != 0) {
-            goto error_exit;
-        }
-#endif
-#if defined(_M_AMD64) || defined(_M_IX86)
-        /* 32-bit x86 process */
-        memcpy(code, code32_template, CODE32_SIZE);
-        code_size = CODE32_SIZE;
-        *(unsigned int*)(code + CALL_LoadLibraryW + 1) = load_library - ((unsigned int)(size_t)injector->remote_mem + CALL_LoadLibraryW + 5);
-        *(unsigned int*)(code + MOV_EAX + 1) = (unsigned int)(size_t)injector->remote_mem + page_size;
-        *(unsigned int*)(code + CALL_GetLastError1 + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError1 + 5);
-        *(unsigned int*)(code + CALL_FreeLibrary + 1) = free_library - ((unsigned int)(size_t)injector->remote_mem + CALL_FreeLibrary + 5);
-        *(unsigned int*)(code + CALL_GetLastError2 + 1) = get_last_error - ((unsigned int)(size_t)injector->remote_mem + CALL_GetLastError2 + 5);
-#endif
-#ifdef _M_AMD64
-    } else {
-        /* 64-bit x64 process */
+    case IMAGE_FILE_MACHINE_AMD64: /* x64 */
         memcpy(code, code64_template, CODE64_SIZE);
         code_size = CODE64_SIZE;
         *(size_t*)(code + ADDR64_LoadLibraryW) = load_library;
         *(size_t*)(code + ADDR64_FreeLibrary) = free_library;
         *(size_t*)(code + ADDR64_GetLastError) = get_last_error;
         injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE64_OFFSET;
-    }
+        break;
 #endif
 #ifdef _M_ARM64
-    memcpy(code, code64_template, CODE64_SIZE);
-    code_size = CODE64_SIZE;
-    *(size_t*)(code + ADDR_LoadLibraryW) = load_library;
-    *(size_t*)(code + ADDR_FreeLibrary) = free_library;
-    *(size_t*)(code + ADDR_GetLastError) = get_last_error;
+    case IMAGE_FILE_MACHINE_ARM64: /* arm64 */
+        memcpy(code, code64_template, CODE64_SIZE);
+        code_size = CODE64_SIZE;
+        *(size_t*)(code + ADDR_LoadLibraryW) = load_library;
+        *(size_t*)(code + ADDR_FreeLibrary) = free_library;
+        *(size_t*)(code + ADDR_GetLastError) = get_last_error;
+        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
+        break;
 #endif
+#if defined(_M_AMD64) || defined(_M_IX86)
+    case IMAGE_FILE_MACHINE_I386: /* x86 */
+        memcpy(code, code32_template, CODE32_SIZE);
+        code_size = CODE32_SIZE;
+#define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->remote_mem + offset + 5)
+        FIX_CALL_RELATIVE(load_library, CALL_LoadLibraryW);
+        FIX_CALL_RELATIVE(free_library, CALL_FreeLibrary);
+        FIX_CALL_RELATIVE(get_last_error, CALL_GetLastError1);
+        FIX_CALL_RELATIVE(get_last_error, CALL_GetLastError2);
+        *(uint32_t*)(code + MOV_EAX + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
+        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
+        break;
+#endif
+    default:
+        set_errmsg("Never reach here: arch=0x%x", arch);
+        rv = INJERR_OTHER;
+        goto error_exit;
+    }
+
     if (!WriteProcessMemory(injector->hProcess, injector->remote_mem, code, code_size, &written)) {
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
@@ -642,4 +667,71 @@ static const char *w32strerr(DWORD err)
         sprintf(errmsg, "win32 error code 0x%x", err);
     }
     return errmsg;
+}
+
+static USHORT process_arch(HANDLE hProcess)
+{
+    static IsWow64Process2_t IsWow64Process2_func = (IsWow64Process2_t)-1;
+    if (IsWow64Process2_func == (IsWow64Process2_t)-1) {
+        IsWow64Process2_func = (IsWow64Process2_t)GetProcAddress(GetModuleHandleA("kernel32"), "IsWow64Process2");
+    }
+    if (IsWow64Process2_func != NULL) {
+        /* Windows 10 */
+        USHORT process_machine;
+        USHORT native_machine;
+        if (IsWow64Process2_func(hProcess, &process_machine, &native_machine)) {
+            if (process_machine != IMAGE_FILE_MACHINE_UNKNOWN) {
+                return process_machine;
+            } else {
+                return native_machine;
+            }
+        }
+    } else {
+        /* Windows 8.1 or earlier */
+        /* arch will be either x86 or x64. */
+#ifdef _M_AMD64
+        BOOL is_wow64_proc;
+        if (IsWow64Process(hProcess, &is_wow64_proc)) {
+            if (is_wow64_proc) {
+                return IMAGE_FILE_MACHINE_I386;
+            } else {
+                return IMAGE_FILE_MACHINE_AMD64;
+            }
+        }
+#endif
+#ifdef _M_IX86
+        BOOL is_wow64_proc;
+        if (IsWow64Process(GetCurrentProcess(), &is_wow64_proc)) {
+            if (!is_wow64_proc) {
+                /* Run on 32-bit Windows */
+                return IMAGE_FILE_MACHINE_I386;
+            }
+            /* Run on Windows x64 */
+            if (IsWow64Process(hProcess, &is_wow64_proc)) {
+                if (is_wow64_proc) {
+                    return IMAGE_FILE_MACHINE_I386;
+                } else {
+                    return IMAGE_FILE_MACHINE_AMD64;
+                }
+            }
+        }
+#endif
+    }
+    return IMAGE_FILE_MACHINE_UNKNOWN;
+}
+
+static const char *arch_name(USHORT arch)
+{
+    switch (arch) {
+    case IMAGE_FILE_MACHINE_AMD64:
+        return "x64";
+    case IMAGE_FILE_MACHINE_ARM64:
+        return "arm64";
+    case IMAGE_FILE_MACHINE_ARMNT:
+        return "arm32";
+    case IMAGE_FILE_MACHINE_I386:
+        return "x86";
+    default:
+        return "unknown";
+    }
 }

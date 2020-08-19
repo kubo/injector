@@ -154,6 +154,44 @@ static const unsigned int arm64_code_template[] = {
 #define ARM64_CODE_SIZE          0x0070
 #endif
 
+#if defined(_M_ARM64) || defined(_M_ARMT)
+static const uint16_t armt_code_template[] = {
+    // ---------- call LoadLibraryW ----------
+    /* 0000:     */ 0xb508,         // push  {r3, lr}
+    /* 0002:     */ 0x4b08,         // ldr   r3, [pc, #32] ; ARMT_ADDR_LoadLibraryW
+    /* 0004:     */ 0x4798,         // blx   r3
+    /* 0006:     */ 0xb150,         // cbz   r0, L1
+    /* 0008:     */ 0x467b,         // mov   r3, pc
+    /* 000a:     */ 0xf8c3, 0x0ff4, // str.w r0, [r3, #4084] ; load_address
+    /* 000e:     */ 0x2000,         // movs  r0, #0
+    /* 0010:     */ 0xbd08,         // pop   {r3, pc}
+
+    // ---------- call FreeLibrary ----------
+#define ARMT_UNINJECTION_CODE_OFFSET 0x0012
+
+    /* 0012:     */ 0xb508,         // push  {r3, lr}
+    /* 0014:     */ 0x4b04,         // ldr   r3, [pc, #16] ; ARMT_ADDR_FreeLibrary
+    /* 0016:     */ 0x4798,         // blx   r3
+    /* 0018:     */ 0xb108,         // cbz   r0, L1
+    /* 001a:     */ 0x2000,         // movs  r0, #0
+    /* 001c:     */ 0xbd08,         // pop   {r3, pc}
+
+    // ---------- call GetLastError ----------
+    /* 001e: L1: */ 0x4b03,         // ldr   r3, [pc, #12] ; ARMT_ADDR_GetLastError
+    /* 0020:     */ 0x4798,         // blx   r3
+    /* 0022:     */ 0xbd08,         // pop   {r3, pc}
+
+    // ---------- literal pool ----------
+#define ARMT_ADDR_LoadLibraryW    0x0024
+    /* 0024:     */ 0, 0,           // .word
+#define ARMT_ADDR_FreeLibrary     0x0028
+    /* 0028:     */ 0, 0,           // .word
+#define ARMT_ADDR_GetLastError    0x002c
+    /* 002c:     */ 0, 0,           // .word
+};
+#define ARMT_CODE_SIZE          0x0030
+#endif
+
 #if defined(_M_AMD64) || defined(_M_IX86)
 static const char x86_code_template[] =
     // ---------- call LoadLibraryW ----------
@@ -195,6 +233,10 @@ static const char x86_code_template[] =
 #define CURRENT_ARCH "arm64"
 #define CODE_SIZE ARM64_CODE_SIZE
 #endif
+#ifdef _M_ARMT
+#define CURRENT_ARCH "arm"
+#define CODE_SIZE ARMT_CODE_SIZE
+#endif
 #ifdef _M_IX86
 #define CURRENT_ARCH "x86"
 #define CODE_SIZE X86_CODE_SIZE
@@ -208,6 +250,7 @@ static const char *arch_name(USHORT arch);
 struct injector {
     HANDLE hProcess;
     char *remote_mem;
+    char *injection_code;
     char *uninjection_code;
 };
 
@@ -243,7 +286,7 @@ static BOOL init(void)
     return TRUE;
 }
 
-#ifdef _M_AMD64
+#if defined(_M_AMD64) || defined(_M_ARM64)
 static int cmp_func(const void *context, const void *key, const void *datum)
 {
     ptrdiff_t rva_to_va = (ptrdiff_t)context;
@@ -448,6 +491,16 @@ int injector_attach(injector_t **injector_out, DWORD pid)
 #ifdef _M_ARM64
     case IMAGE_FILE_MACHINE_ARM64:
         break;
+    case IMAGE_FILE_MACHINE_ARMNT:
+        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
+        if (rv != 0) {
+            goto error_exit;
+        }
+        break;
+#endif
+#ifdef _M_ARMT
+    case IMAGE_FILE_MACHINE_ARMNT:
+        break;
 #endif
 #ifdef _M_IX86
     case IMAGE_FILE_MACHINE_I386:
@@ -474,6 +527,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         goto error_exit;
     }
 
+    injector->injection_code = injector->remote_mem;
     switch (arch) {
 #ifdef _M_AMD64
     case IMAGE_FILE_MACHINE_AMD64: /* x64 */
@@ -493,6 +547,17 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         *(size_t*)(code + ARM64_ADDR_FreeLibrary) = free_library;
         *(size_t*)(code + ARM64_ADDR_GetLastError) = get_last_error;
         injector->uninjection_code = injector->remote_mem + ARM64_UNINJECTION_CODE_OFFSET;
+        break;
+#endif
+#if defined(_M_ARM64) || defined(_M_ARMT)
+    case IMAGE_FILE_MACHINE_ARMNT: /* arm (thumb mode) */
+        memcpy(code, armt_code_template, ARMT_CODE_SIZE);
+        code_size = ARMT_CODE_SIZE;
+        *(size_t*)(code + ARMT_ADDR_LoadLibraryW) = load_library;
+        *(size_t*)(code + ARMT_ADDR_FreeLibrary) = free_library;
+        *(size_t*)(code + ARMT_ADDR_GetLastError) = get_last_error;
+        injector->injection_code = injector->remote_mem + 1;
+        injector->uninjection_code = injector->remote_mem + ARMT_UNINJECTION_CODE_OFFSET + 1;
         break;
 #endif
 #if defined(_M_AMD64) || defined(_M_IX86)
@@ -571,7 +636,7 @@ int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
     }
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->remote_mem, injector->remote_mem + page_size + sizeof(void*), 0, NULL);
+    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->injection_code, injector->remote_mem + page_size + sizeof(void*), 0, NULL);
     if (hThread == NULL) {
         set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
@@ -598,7 +663,7 @@ int injector_uninject(injector_t *injector, void *handle)
     HANDLE hThread;
     DWORD err;
 
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)(injector->uninjection_code), handle, 0, NULL);
+    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->uninjection_code, handle, 0, NULL);
     if (hThread == NULL) {
         set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
@@ -728,7 +793,7 @@ static const char *arch_name(USHORT arch)
     case IMAGE_FILE_MACHINE_ARM64:
         return "arm64";
     case IMAGE_FILE_MACHINE_ARMNT:
-        return "arm32";
+        return "arm";
     case IMAGE_FILE_MACHINE_I386:
         return "x86";
     default:

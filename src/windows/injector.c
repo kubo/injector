@@ -69,11 +69,11 @@ static char errmsg[512];
 //    }
 // }
 #ifdef _M_AMD64
-static const char code64_template[] =
+static const char x64_code_template[] =
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
     /* 0004:     */ "\xFF\x15\x3E\x00\x00\x00"     // call LoadLibraryW
-    //                       ^^^^^^^^^^^^^^^^0x0000003e = ADDR64_LoadLibraryW - (0x0004 + 6)
+    //                       ^^^^^^^^^^^^^^^^0x0000003e = X64_ADDR_LoadLibraryW - (0x0004 + 6)
     /* 000A:     */ "\x48\x85\xC0"                 // test rax,rax
     /* 000D:     */ "\x74\x0B"                     // je   L1
     /* 000F:     */ "\x48\x89\x05\xEA\x0F\x00\x00" // mov  [load_address], rax
@@ -81,21 +81,21 @@ static const char code64_template[] =
     /* 0016:     */ "\x33\xC0"                     // xor  eax,eax
     /* 0018:     */ "\xEB\x06"                     // jmp  L2
     /* 001A: L1: */ "\xFF\x15\x38\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x00000038 = ADDR64_GetLastError - (0x001A + 6)
+    //                       ^^^^^^^^^^^^^^^^0x00000038 = X64_ADDR_GetLastError - (0x001A + 6)
     /* 0020: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
     /* 0024:     */ "\xC3"                         // ret
 
     // ---------- call FreeLibrary ----------
-#define UNINJECTION_CODE64_OFFSET 0x25
+#define X64_UNINJECTION_CODE_OFFSET 0x25
     /* 0025:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
     /* 0029:     */ "\xFF\x15\x21\x00\x00\x00"     // call FreeLibrary
-    //                       ^^^^^^^^^^^^^^^^0x00000021 = ADDR64_FreeLibrary - (0x0029 + 6)
+    //                       ^^^^^^^^^^^^^^^^0x00000021 = X64_ADDR_FreeLibrary - (0x0029 + 6)
     /* 002F:     */ "\x85\xC0"                     // test eax,eax
     /* 0031:     */ "\x74\x04"                     // je   L1
     /* 0033:     */ "\x33\xC0"                     // xor  eax,eax
     /* 0035:     */ "\xEB\x06"                     // jmp  L2
     /* 0037: L1: */ "\xFF\x15\x1B\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x0000001B = ADDR64_GetLastError - (0x0037 + 6)
+    //                       ^^^^^^^^^^^^^^^^0x0000001B = X64_ADDR_GetLastError - (0x0037 + 6)
     /* 003D: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
     /* 0041:     */ "\xC3"                         // ret
 
@@ -103,101 +103,101 @@ static const char code64_template[] =
     /* 0042:     */ "\x90\x90\x90\x90\x90\x90"
 
     // ---------- literal pool ----------
-#define ADDR64_LoadLibraryW  0x0048
+#define X64_ADDR_LoadLibraryW  0x0048
     /* 0048:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define ADDR64_FreeLibrary   0x0050
+#define X64_ADDR_FreeLibrary   0x0050
     /* 0050:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define ADDR64_GetLastError  0x0058
+#define X64_ADDR_GetLastError  0x0058
     /* 0058:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
     ;
 
-#define CODE64_SIZE          0x0060
+#define X64_CODE_SIZE          0x0060
 #endif
 
 #ifdef _M_ARM64
-static const unsigned int code64_template[] = {
+static const unsigned int arm64_code_template[] = {
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0004:     */ 0x580002A9, //  ldr   x9,$ADDR_LoadLibraryW
+    /* 0004:     */ 0x580002A9, //  ldr   x9,$ARM64_ADDR_LoadLibraryW
     /* 0008:     */ 0xD63F0120, //  blr   x9
     /* 000C:     */ 0xB40000A0, //  cbz   x0,$L1
     /* 0010:     */ 0xB0000001, //  adrp  x1, #0x1000
     /* 0014:     */ 0xF9000020, //  str   x0, [x1]
     /* 0018:     */ 0x52800000, //  mov   w0,#0
     /* 001C:     */ 0x14000003, //  b     $L2
-    /* 0020: L1: */ 0x58000249, //  ldr   x9,$ADDR_GetLastError
+    /* 0020: L1: */ 0x58000249, //  ldr   x9,$ARM64_ADDR_GetLastError
     /* 0024:     */ 0xD63F0120, //  blr   x9
     /* 0028: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
     /* 002C:     */ 0xD65F03C0, //  ret
 
     // ---------- call FreeLibrary ----------
-#define UNINJECTION_CODE_OFFSET 0x0030
+#define ARM64_UNINJECTION_CODE_OFFSET 0x0030
     /* 0030:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0034:     */ 0x58000169, //  ldr   x9,$ADDR_FreeLibrary
+    /* 0034:     */ 0x58000169, //  ldr   x9,$ARM64_ADDR_FreeLibrary
     /* 0038:     */ 0xD63F0120, //  blr   x9
     /* 003C:     */ 0xB4000060, //  cbz   x0,$L1
     /* 0040:     */ 0x52800000, //  mov   w0,#0
     /* 0044:     */ 0x14000003, //  b     $L2
-    /* 0048: L1: */ 0x58000109, //  ldr   x9,$ADDR_GetLastError
+    /* 0048: L1: */ 0x58000109, //  ldr   x9,$ARM64_ADDR_GetLastError
     /* 004C:     */ 0xD63F0120, //  blr   x9
     /* 0050: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
     /* 0054:     */ 0xD65F03C0, //  ret
 
     // ---------- literal pool ----------
-#define ADDR_LoadLibraryW    0x0058
+#define ARM64_ADDR_LoadLibraryW    0x0058
     /* 0058:     */ 0, 0,
-#define ADDR_FreeLibrary     0x0060
+#define ARM64_ADDR_FreeLibrary     0x0060
     /* 0060:     */ 0, 0,
-#define ADDR_GetLastError    0x0068
+#define ARM64_ADDR_GetLastError    0x0068
     /* 0068:     */ 0, 0
 };
-#define CODE64_SIZE          0x0070
+#define ARM64_CODE_SIZE          0x0070
 #endif
 
 #if defined(_M_AMD64) || defined(_M_IX86)
-static const char code32_template[] =
+static const char x86_code_template[] =
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define CALL_LoadLibraryW    0x0004
+#define X86_CALL_LoadLibraryW    0x0004
     /* 0004:     */ "\xE8\x00\x00\x00\x00"      // call LoadLibraryW@4
     /* 0009:     */ "\x85\xC0"                  // test eax,eax
     /* 000B:     */ "\x74\x09"                  // je   L1
-#define MOV_EAX  0x000D
+#define X86_MOV_EAX  0x000D
     /* 000D:     */ "\xA3\x00\x00\x00\x00"      // mov  dword ptr [load_address], eax
     /* 0012:     */ "\x33\xC0"                  // xor  eax,eax
     /* 0014:     */ "\xEB\x05"                  // jmp  L2
-#define CALL_GetLastError1   0x0016
+#define X86_CALL_GetLastError1   0x0016
     /* 0016: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
     /* 001B: L2: */ "\xC2\x04\x00"              // ret  4
 
     // ---------- call FreeLibrary ----------
-#define UNINJECTION_CODE_OFFSET 0x001E
+#define X86_UNINJECTION_CODE_OFFSET 0x001E
     /* 001E:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define CALL_FreeLibrary     0x0022
+#define X86_CALL_FreeLibrary     0x0022
     /* 0022:     */ "\xE8\x00\x00\x00\x00"      // call FreeLibrary@4
     /* 0027:     */ "\x85\xC0"                  // test eax,eax
     /* 0029:     */ "\x74\x04"                  // je   L1
     /* 002B:     */ "\x33\xC0"                  // xor  eax,eax
     /* 002D:     */ "\xEB\x05"                  // jmp  L2
-#define CALL_GetLastError2   0x002F
+#define X86_CALL_GetLastError2   0x002F
     /* 002F: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
     /* 0034: L2: */ "\xC2\x04\x00"              // ret  4
     ;
 
-#define CODE32_SIZE          0x0037
+#define X86_CODE_SIZE          0x0037
 #endif
 
 #ifdef _M_AMD64
 #define CURRENT_ARCH "x64"
-#define CODE_SIZE CODE64_SIZE
+#define CODE_SIZE X64_CODE_SIZE
 #endif
 #ifdef _M_ARM64
 #define CURRENT_ARCH "arm64"
-#define CODE_SIZE CODE64_SIZE
+#define CODE_SIZE ARM64_CODE_SIZE
 #endif
 #ifdef _M_IX86
 #define CURRENT_ARCH "x86"
-#define CODE_SIZE CODE32_SIZE
+#define CODE_SIZE X86_CODE_SIZE
 #endif
 
 static void set_errmsg(const char *format, ...);
@@ -477,35 +477,35 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     switch (arch) {
 #ifdef _M_AMD64
     case IMAGE_FILE_MACHINE_AMD64: /* x64 */
-        memcpy(code, code64_template, CODE64_SIZE);
-        code_size = CODE64_SIZE;
-        *(size_t*)(code + ADDR64_LoadLibraryW) = load_library;
-        *(size_t*)(code + ADDR64_FreeLibrary) = free_library;
-        *(size_t*)(code + ADDR64_GetLastError) = get_last_error;
-        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE64_OFFSET;
+        memcpy(code, x64_code_template, X64_CODE_SIZE);
+        code_size = X64_CODE_SIZE;
+        *(size_t*)(code + X64_ADDR_LoadLibraryW) = load_library;
+        *(size_t*)(code + X64_ADDR_FreeLibrary) = free_library;
+        *(size_t*)(code + X64_ADDR_GetLastError) = get_last_error;
+        injector->uninjection_code = injector->remote_mem + X64_UNINJECTION_CODE_OFFSET;
         break;
 #endif
 #ifdef _M_ARM64
     case IMAGE_FILE_MACHINE_ARM64: /* arm64 */
-        memcpy(code, code64_template, CODE64_SIZE);
-        code_size = CODE64_SIZE;
-        *(size_t*)(code + ADDR_LoadLibraryW) = load_library;
-        *(size_t*)(code + ADDR_FreeLibrary) = free_library;
-        *(size_t*)(code + ADDR_GetLastError) = get_last_error;
-        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
+        memcpy(code, arm64_code_template, ARM64_CODE_SIZE);
+        code_size = ARM64_CODE_SIZE;
+        *(size_t*)(code + ARM64_ADDR_LoadLibraryW) = load_library;
+        *(size_t*)(code + ARM64_ADDR_FreeLibrary) = free_library;
+        *(size_t*)(code + ARM64_ADDR_GetLastError) = get_last_error;
+        injector->uninjection_code = injector->remote_mem + ARM64_UNINJECTION_CODE_OFFSET;
         break;
 #endif
 #if defined(_M_AMD64) || defined(_M_IX86)
     case IMAGE_FILE_MACHINE_I386: /* x86 */
-        memcpy(code, code32_template, CODE32_SIZE);
-        code_size = CODE32_SIZE;
+        memcpy(code, x86_code_template, X86_CODE_SIZE);
+        code_size = X86_CODE_SIZE;
 #define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->remote_mem + offset + 5)
-        FIX_CALL_RELATIVE(load_library, CALL_LoadLibraryW);
-        FIX_CALL_RELATIVE(free_library, CALL_FreeLibrary);
-        FIX_CALL_RELATIVE(get_last_error, CALL_GetLastError1);
-        FIX_CALL_RELATIVE(get_last_error, CALL_GetLastError2);
-        *(uint32_t*)(code + MOV_EAX + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
-        injector->uninjection_code = injector->remote_mem + UNINJECTION_CODE_OFFSET;
+        FIX_CALL_RELATIVE(load_library, X86_CALL_LoadLibraryW);
+        FIX_CALL_RELATIVE(free_library, X86_CALL_FreeLibrary);
+        FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError1);
+        FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError2);
+        *(uint32_t*)(code + X86_MOV_EAX + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
+        injector->uninjection_code = injector->remote_mem + X86_UNINJECTION_CODE_OFFSET;
         break;
 #endif
     default:

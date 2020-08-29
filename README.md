@@ -140,13 +140,13 @@ injector process \ target process | arm64 | armhf | armel
 
 ## Windows
 
-injector process \ target process | x64 | 32-bit | arm64
+injector process \ target process | x64 | x86 | arm64
 ---|---|---|---
 **x64**     | success(*2) | success(*2) | -
-**32-bit**  | failure(*1) | success(*2) | -
+**x86**     | failure(*1) | success(*2) | -
 **arm64**   | -           | -           | not tested(*3)
 
-*1: failure with `64-bit target process isn't supported by 32-bit process`.  
+*1: failure with `x64 target process isn't supported by x86 process`.  
 *2: tested on travis-ci  
 *3: It may work though I have not tested it. Let me know if it really works.
 

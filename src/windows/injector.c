@@ -514,15 +514,9 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     }
 
     injector->remote_mem = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
-                                          MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READ);
+                                          MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (injector->remote_mem == NULL) {
         set_errmsg("VirtualAllocEx error: %s", w32strerr(GetLastError()));
-        rv = INJERR_OTHER;
-        goto error_exit;
-    }
-
-    if (!VirtualProtectEx(injector->hProcess, injector->remote_mem + page_size, page_size, PAGE_READWRITE, &old_protect)) {
-        set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
     }
@@ -584,6 +578,13 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         rv = INJERR_OTHER;
         goto error_exit;
     }
+
+    if (!VirtualProtectEx(injector->hProcess, injector->remote_mem, page_size, PAGE_EXECUTE_READ, &old_protect)) {
+        set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
+        rv = INJERR_OTHER;
+        goto error_exit;
+    }
+
     *injector_out = injector;
     return 0;
 error_exit:

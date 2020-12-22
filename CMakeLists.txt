@@ -9,4 +9,4 @@ elseif(UNIX)
   message(STATUS "UNIX detected")
 endif()
 
-add_library(dllinjector STATIC SOURCES)
+add_library(dllinjector STATIC ${SOURCES})

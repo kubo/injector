@@ -9,5 +9,5 @@ elseif(UNIX)
   message(STATUS "UNIX detected")
 endif()
 
-target_include_directories(dllinjector PRIVATE ${PROJECT_SOURCE_DIR/include)
+target_include_directories(dllinjector PRIVATE ${PROJECT_SOURCE_DIR}/include)
 add_library(dllinjector STATIC ${SOURCES})

@@ -9,7 +9,6 @@ elseif(UNIX)
   message(STATUS "UNIX detected")
 endif()
 
-target_include_directories(dllinjector PRIVATE include/)
 target_compile_definitions(dllinjector PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 add_library(dllinjector STATIC SOURCES)

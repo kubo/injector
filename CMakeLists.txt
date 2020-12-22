@@ -1,4 +1,4 @@
-set(CMAKE_C_STANDARD 98)
+set(CMAKE_C_STANDARD 99)
 project(dllinjector)
 
 if(WIN32)

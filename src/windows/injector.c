@@ -287,12 +287,16 @@ static BOOL init(void)
 }
 
 #if defined(_M_AMD64) || defined(_M_ARM64)
-static int cmp_func(const void *context, const void *key, const void *datum)
+static DWORD name_index(IMAGE_NT_HEADERS *nt_hdrs, void *base, const DWORD *names, DWORD num_names, const char *name)
 {
-    ptrdiff_t rva_to_va = (ptrdiff_t)context;
-    const char *k = (const char *)key;
-    const char *d = (const char *)(rva_to_va + *(const DWORD*)datum);
-    return strcmp(k, d);
+    DWORD idx;
+    for (idx = 0; idx < num_names; idx++) {
+        if (strcmp((const char*)ImageRvaToVa(nt_hdrs, base, names[idx], NULL), name) == 0) {
+            return idx;
+        }
+    }
+    set_errmsg("Could not find the address of %s", name);
+    return (DWORD)-1;
 }
 
 static int funcaddr(DWORD pid, size_t *load_library, size_t *free_library, size_t *get_last_error)
@@ -306,9 +310,9 @@ static int funcaddr(DWORD pid, size_t *load_library, size_t *free_library, size_
     IMAGE_NT_HEADERS *nt_hdrs;
     ULONG exp_size;
     const IMAGE_EXPORT_DIRECTORY *exp;
-    const DWORD *names, *name, *funcs;
+    const DWORD *names, *funcs;
     const WORD *ordinals;
-    ptrdiff_t rva_to_va;
+    DWORD idx;
     int rv = INJERR_OTHER;
 
     /* Get the full path of kernel32.dll. */
@@ -389,31 +393,27 @@ retry:
         set_errmsg("ImageRvaToVa error: %s", w32strerr(GetLastError()));
         goto exit;
     }
-    rva_to_va = (size_t)ImageRvaToVa(nt_hdrs, base, names[0], NULL) - (size_t)names[0];
 
     /* Find the address of LoadLibraryW */
-    name = bsearch_s((void*)"LoadLibraryW", names, exp->NumberOfNames, sizeof(DWORD), cmp_func, (void*)rva_to_va);
-    if (name == NULL) {
-        set_errmsg("Could not find the address of LoadLibraryW");
+    idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "LoadLibraryW");
+    if (idx == (DWORD)-1) {
         goto exit;
     }
-    *load_library = (size_t)me.modBaseAddr + funcs[ordinals[name - names]];
+    *load_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
 
     /* Find the address of FreeLibrary */
-    name = bsearch_s((void*)"FreeLibrary", names, exp->NumberOfNames, sizeof(DWORD), cmp_func, (void*)rva_to_va);
-    if (name == NULL) {
-        set_errmsg("Could not find the address of FreeLibrary");
+    idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "FreeLibrary");
+    if (idx == (DWORD)-1) {
         goto exit;
     }
-    *free_library = (size_t)me.modBaseAddr + funcs[ordinals[name - names]];
+    *free_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
 
     /* Find the address of GetLastError */
-    name = bsearch_s((void*)"GetLastError", names, exp->NumberOfNames, sizeof(DWORD), cmp_func, (void*)rva_to_va);
-    if (name == NULL) {
-        set_errmsg("Could not find the address of GetLastError");
+    idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "GetLastError");
+    if (idx == (DWORD)-1) {
         goto exit;
     }
-    *get_last_error = (size_t)me.modBaseAddr + funcs[ordinals[name - names]];
+    *get_last_error = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
     rv = 0;
 exit:
     if (base != NULL) {

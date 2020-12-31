@@ -1,6 +1,6 @@
 # Injector
 
-[![Build Status](https://travis-ci.org/kubo/injector.svg?branch=master)](https://travis-ci.org/kubo/injector)
+[![Build Status](https://travis-ci.com/kubo/injector.svg?branch=master)](https://travis-ci.com/kubo/injector)
 
 **Library for injecting a shared library into a Linux or Windows process**
 

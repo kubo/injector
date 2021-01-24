@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         case 'n':
             pid = find_process(optarg);
             if (pid == INVALID_PID) {
-                fprintf(stderr, "counld not find the process: %s\n", optarg);
+                fprintf(stderr, "could not find the process: %s\n", optarg);
                 return 1;
             }
             printf("targeting process \"%s\" with pid %d\n", optarg, pid);

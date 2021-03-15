@@ -592,7 +592,7 @@ error_exit:
     return rv;
 }
 
-int injector_inject(injector_t *injector, const char *path, void **handle)
+int injector_inject(injector_t *injector, const char *path, void **handle, const char *call)
 {
     DWORD pathlen = (DWORD)strlen(path);
     wchar_t *wpath;

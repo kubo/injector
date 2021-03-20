@@ -143,7 +143,7 @@ int main(int argc, char **argv)
     }
     for (i = optind; i < argc; i++) {
         char *libname = argv[i];
-        if (injector_inject(injector, libname, NULL, NULL) == 0) {
+        if (injector_inject(injector, libname, NULL) == 0) {
             printf("\"%s\" successfully injected\n", libname);
         } else {
             fprintf(stderr, "could not inject \"%s\"\n", libname);

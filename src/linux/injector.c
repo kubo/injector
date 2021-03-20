@@ -111,13 +111,12 @@ error_exit:
     return rv;
 }
 
-int injector_inject(injector_t *injector, const char *path, void **handle, const char *call)
+int injector_inject(injector_t *injector, const char *path, void **handle)
 {
     char abspath[PATH_MAX];
     size_t len;
     int rv;
     long retval;
-    void* hdl;
 
     injector__errmsg_is_set = 0;
 
@@ -145,30 +144,8 @@ int injector_inject(injector_t *injector, const char *path, void **handle, const
         injector__set_errmsg("dlopen failed");
         return INJERR_ERROR_IN_TARGET;
     }
-    hdl = (void*)retval;
     if (handle != NULL) {
-        *handle = hdl;
-    }
-    if (call != NULL) {
-        len = strlen(call) + 1;
-        if (len > injector->text_size) {
-            injector__set_errmsg("too long function name: %s", call);
-            return INJERR_FILE_NOT_FOUND;
-        }
-        rv = injector__write(injector, injector->text, call, len);
-        if (rv != 0) {
-            return rv;
-        }
-        rv = injector__call_function(injector, &retval, injector->dlsym_addr, hdl, injector->text);
-        if (retval == 0) {
-            injector__set_errmsg("function not found: %s", call);
-            return INJERR_FUNCTION_MISSING;
-        }
-        rv = injector__call_function(injector, &retval, retval);
-        if (rv != 0)
-        {
-            return rv;
-        }
+        *handle = (void*)retval;
     }
     return 0;
 }

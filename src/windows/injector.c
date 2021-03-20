@@ -567,7 +567,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         *(size_t*)(code + X64_ADDR_FreeLibrary) = free_library;
         *(size_t*)(code + X64_ADDR_GetLastError) = get_last_error;
         injector->uninjection_code = injector->remote_mem + X64_UNINJECTION_CODE_OFFSET;
-        injector->call_code = injector->remote_mem + X64_INJECTION_CALL_CODE_OFFSET;
+        injector->call_code = injector->remote_mem + X64_CALL_CODE_OFFSET;
         break;
 #endif
 #ifdef _M_ARM64

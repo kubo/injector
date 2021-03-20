@@ -53,12 +53,13 @@ extern "C" {
 #define INJERR_UNSUPPORTED_TARGET -9   /* linux, windows */
 #define INJERR_INVALID_ELF_FORMAT -10  /* linux */
 #define INJERR_WAIT_TRACEE -11         /* linux */
-#define INJERR_FUNCTION_MISSING -12    /* linux */
+#define INJERR_FUNCTION_MISSING -12    /* linux, windows */
 
 typedef struct injector injector_t;
 
 int injector_attach(injector_t **injector, injector_pid_t pid);
-int injector_inject(injector_t *injector, const char *path, void **handle, const char* call);
+int injector_inject(injector_t *injector, const char *path, void **handle);
+int injector_call(injector_t *injector, void *handle, const char* name);
 int injector_uninject(injector_t *injector, void *handle);
 int injector_detach(injector_t *injector);
 const char *injector_error(void);

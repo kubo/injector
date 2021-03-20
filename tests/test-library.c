@@ -1,13 +1,22 @@
 #define INCR_ON_INJECTION 13
 #define INCR_ON_UNINJECTION 17
+#define INCR_ON_CALLINJECTION 19
 
 #ifdef _WIN32
 #include <windows.h>
 
+static int *exit_value_addr;
+
+__declspec(dllexport)
+void run()
+{
+    exit_value_addr += INCR_ON_CALLINJECTION;
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {
     HMODULE hMod;
-    static int *exit_value_addr;
+
 
     switch (reason) {
     case DLL_PROCESS_ATTACH:
@@ -27,6 +36,11 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 }
 #else
 extern int exit_value;
+
+void run()
+{
+    exit_value += INCR_ON_CALLINJECTION;
+}
 
 __attribute__((constructor))
 void init()

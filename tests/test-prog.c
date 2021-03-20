@@ -40,6 +40,7 @@
 
 #define INCR_ON_INJECTION 13
 #define INCR_ON_UNINJECTION 17
+#define INCR_ON_CALLINJECTION 19
 
 #ifdef _WIN32
 #define EXEEXT ".exe"

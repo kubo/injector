@@ -45,7 +45,6 @@ typedef BOOL (WINAPI *IsWow64Process2_t)(HANDLE hProcess, USHORT *pProcessMachin
 
 static DWORD page_size = 0;
 static size_t func_LoadLibraryW;
-static size_t func_GetProcAddress;
 static size_t func_FreeLibrary;
 static size_t func_GetLastError;
 static char errmsg[512];
@@ -73,62 +72,46 @@ static char errmsg[512];
 static const char x64_code_template[] =
     // ---------- call LoadLibraryW ----------
     /* 0000:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0004:     */ "\xFF\x15\x5E\x00\x00\x00"     // call LoadLibraryW
-    //                       ^^^^^^^^^^^^^^^^0x0000005e = X64_ADDR_LoadLibraryW - (0x0004 + 6)
+    /* 0004:     */ "\xFF\x15\x3E\x00\x00\x00"     // call LoadLibraryW
+    //                       ^^^^^^^^^^^^^^^^0x0000003e = X64_ADDR_LoadLibraryW - (0x0004 + 6)
     /* 000A:     */ "\x48\x85\xC0"                 // test rax,rax
     /* 000D:     */ "\x74\x0B"                     // je   L1
     /* 000F:     */ "\x48\x89\x05\xEA\x0F\x00\x00" // mov  [load_address], rax
     //                           ^^^^^^^^^^^^^^^^0x00000fea = 0x1000 - (0x000F + 7)
     /* 0016:     */ "\x33\xC0"                     // xor  eax,eax
     /* 0018:     */ "\xEB\x06"                     // jmp  L2
-    /* 001A: L1: */ "\xFF\x15\x58\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x00000058 = X64_ADDR_GetLastError - (0x001A + 6)
+    /* 001A: L1: */ "\xFF\x15\x38\x00\x00\x00"     // call GetLastError
+    //                       ^^^^^^^^^^^^^^^^0x00000038 = X64_ADDR_GetLastError - (0x001A + 6)
     /* 0020: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
     /* 0024:     */ "\xC3"                         // ret
 
     // ---------- call FreeLibrary ----------
 #define X64_UNINJECTION_CODE_OFFSET 0x25
     /* 0025:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0029:     */ "\xFF\x15\x41\x00\x00\x00"     // call FreeLibrary
-    //                       ^^^^^^^^^^^^^^^^0x00000041 = X64_ADDR_FreeLibrary - (0x0029 + 6)
+    /* 0029:     */ "\xFF\x15\x21\x00\x00\x00"     // call FreeLibrary
+    //                       ^^^^^^^^^^^^^^^^0x00000021 = X64_ADDR_FreeLibrary - (0x0029 + 6)
     /* 002F:     */ "\x85\xC0"                     // test eax,eax
     /* 0031:     */ "\x74\x04"                     // je   L1
     /* 0033:     */ "\x33\xC0"                     // xor  eax,eax
     /* 0035:     */ "\xEB\x06"                     // jmp  L2
-    /* 0037: L1: */ "\xFF\x15\x3B\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x0000003B = X64_ADDR_GetLastError - (0x0037 + 6)
+    /* 0037: L1: */ "\xFF\x15\x1B\x00\x00\x00"     // call GetLastError
+    //                       ^^^^^^^^^^^^^^^^0x0000001B = X64_ADDR_GetLastError - (0x0037 + 6)
     /* 003D: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
     /* 0041:     */ "\xC3"                         // ret
-    
-    // ---------- call GetProcAddress ----------
-#define X64_CALL_CODE_OFFSET 0x42
-    /* 0042:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0046:     */ "\xFF\x15\x34\x00\x00\x00"     //call GetProcAddress
-    //                        ^^^^^^^^^^^^^^^^0x00000034 = X64_ADDR_GetProcAddress - (0x0046 + 6)
-    /* 004c:     */ "\x48\x85\xC0"                 // test rax,rax
-    /* 004f:     */ "\x74\x0B"                     // je   L1
-    /* 0051:     */ "\x48\x89\x05\xA8\x0F\x00\x00" // mov  [load_address], rax
-    //                           ^^^^^^^^^^^^^^^^0x00000fa8 = 0x1000 - (0x0051 + 7)
-    /* 0058:     */ "\x33\xC0"                     // xor  eax,eax
-    /* 005a:     */ "\xEB\x06"                     // jmp  L2
-    /* 005c: L1: */ "\xFF\x15\x16\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x00000016 = X64_ADDR_GetLastError - (0x005c + 6)
-    /* 0062: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
-    /* 0066:     */ "\xC3"                         // ret
+
     // padding
-    /* 0067:     */ "\x90"
+    /* 0042:     */ "\x90\x90\x90\x90\x90\x90"
+
     // ---------- literal pool ----------
-#define X64_ADDR_LoadLibraryW   0x0068
-    /* 0068:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define X64_ADDR_FreeLibrary    0x0070
-    /* 0070:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define X64_ADDR_GetLastError   0x0078
-    /* 0078:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define X64_ADDR_GetProcAddress 0x0080
-    /* 0080:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define X64_ADDR_LoadLibraryW  0x0048
+    /* 0048:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define X64_ADDR_FreeLibrary   0x0050
+    /* 0050:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+#define X64_ADDR_GetLastError  0x0058
+    /* 0058:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
     ;
 
-#define X64_CODE_SIZE          0x0090
+#define X64_CODE_SIZE          0x0060
 #endif
 
 #ifdef _M_ARM64
@@ -237,24 +220,9 @@ static const char x86_code_template[] =
 #define X86_CALL_GetLastError2   0x002F
     /* 002F: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
     /* 0034: L2: */ "\xC2\x04\x00"              // ret  4
-    
-    // ---------- call GetProcAddress ----------
-#define X86_CALL_CODE_OFFSET 0x0037
-    /* 0037:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define X86_CALL_GetProcAddress    0x003b
-    /* 003b:     */ "\xE8\x00\x00\x00\x00"      // call FreeLibrary@4
-    /* 0040:     */ "\x85\xC0"                  // test eax,eax
-    /* 0042:     */ "\x74\x09"                  // je   L1
-#define X86_MOV_EAX1 0x0044
-    /* 0044:     */ "\xA3\x00\x00\x00\x00"      // mov  dword ptr [load_address], eax
-    /* 0049:     */ "\x33\xC0"                  // xor  eax,eax
-    /* 004b:     */ "\xEB\x05"                  // jmp  L2
-#define X86_CALL_GetLastError3   0x004d
-    /* 004d: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
-    /* 0052: L2: */ "\xC2\x04\x00"              // ret  4    // ret  4
     ;
 
-#define X86_CODE_SIZE          0x0055
+#define X86_CODE_SIZE          0x0037
 #endif
 
 #ifdef _M_AMD64
@@ -284,7 +252,6 @@ struct injector {
     char *remote_mem;
     char *injection_code;
     char *uninjection_code;
-    char *call_code;
 };
 
 static BOOL init(void)
@@ -298,7 +265,6 @@ static BOOL init(void)
     GetSystemInfo(&si);
     page_size = si.dwPageSize;
     func_LoadLibraryW = (size_t)GetProcAddress(kernel32, "LoadLibraryW");
-    func_GetProcAddress = (size_t)GetProcAddress(kernel32, "GetProcAddress");
     func_FreeLibrary = (size_t)GetProcAddress(kernel32, "FreeLibrary");
     func_GetLastError = (size_t)GetProcAddress(kernel32, "GetLastError");
 
@@ -333,7 +299,7 @@ static DWORD name_index(IMAGE_NT_HEADERS *nt_hdrs, void *base, const DWORD *name
     return (DWORD)-1;
 }
 
-static int funcaddr(DWORD pid, size_t *load_library, size_t *get_proc_address, size_t *free_library, size_t *get_last_error)
+static int funcaddr(DWORD pid, size_t *load_library, size_t *free_library, size_t *get_last_error)
 {
     HANDLE hSnapshot;
     MODULEENTRY32W me;
@@ -478,14 +444,13 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     int rv;
     char code[CODE_SIZE];
     size_t code_size;
-    size_t load_library, get_proc_address, free_library, get_last_error;
+    size_t load_library, free_library, get_last_error;
 
     if (page_size == 0) {
         init();
     }
 
     load_library = func_LoadLibraryW;
-    get_proc_address = func_GetProcAddress;
     free_library = func_FreeLibrary;
     get_last_error = func_GetLastError;
 
@@ -517,7 +482,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     case IMAGE_FILE_MACHINE_AMD64:
         break;
     case IMAGE_FILE_MACHINE_I386:
-        rv = funcaddr(pid, &load_library, &get_proc_address, &free_library, &get_last_error);
+        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
         if (rv != 0) {
             goto error_exit;
         }
@@ -527,7 +492,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     case IMAGE_FILE_MACHINE_ARM64:
         break;
     case IMAGE_FILE_MACHINE_ARMNT:
-        rv = funcaddr(pid, &load_library, &get_proc_address, &free_library, &get_last_error);
+        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
         if (rv != 0) {
             goto error_exit;
         }
@@ -563,11 +528,9 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         memcpy(code, x64_code_template, X64_CODE_SIZE);
         code_size = X64_CODE_SIZE;
         *(size_t*)(code + X64_ADDR_LoadLibraryW) = load_library;
-        *(size_t*)(code + X64_ADDR_GetProcAddress) = get_proc_address;
         *(size_t*)(code + X64_ADDR_FreeLibrary) = free_library;
         *(size_t*)(code + X64_ADDR_GetLastError) = get_last_error;
         injector->uninjection_code = injector->remote_mem + X64_UNINJECTION_CODE_OFFSET;
-        injector->call_code = injector->remote_mem + X64_CALL_CODE_OFFSET;
         break;
 #endif
 #ifdef _M_ARM64
@@ -597,15 +560,11 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         code_size = X86_CODE_SIZE;
 #define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->remote_mem + offset + 5)
         FIX_CALL_RELATIVE(load_library, X86_CALL_LoadLibraryW);
-        FIX_CALL_RELATIVE(get_proc_address, X86_CALL_GetProcAddress);
         FIX_CALL_RELATIVE(free_library, X86_CALL_FreeLibrary);
         FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError1);
         FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError2);
-        FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError3);
         *(uint32_t*)(code + X86_MOV_EAX + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
-        *(uint32_t*)(code + X86_MOV_EAX1 + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
         injector->uninjection_code = injector->remote_mem + X86_UNINJECTION_CODE_OFFSET;
-        injector->call_code = injector->remote_mem + X86_CALL_CODE_OFFSET;
         break;
 #endif
     default:
@@ -697,56 +656,6 @@ int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
     if (handle != NULL) {
         *handle = data.load_address;
     }
-    return 0;
-}
-
-int injector_call(injector_t *injector, void *handle, const char* name)
-{
-    struct {
-        void *call_addres;
-        HMODULE module;
-        const char * name;
-    } data = {NULL,};
-    HANDLE hThread;
-    SIZE_T written;
-    DWORD err;
-    
-    data.module = handle;
-    data.name = name;
-    
-    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(data), &written)) {
-        set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->call_code, injector->remote_mem + page_size + sizeof(void*), 0, NULL);
-    if (hThread == NULL) {
-        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
-    WaitForSingleObject(hThread, INFINITE);
-    GetExitCodeThread(hThread, &err);
-    CloseHandle(hThread);
-    if (err != 0) {
-        set_errmsg("GetProcAddress in the target process failed: %s", w32strerr(err));
-        return INJERR_ERROR_IN_TARGET;
-    }
-    if (!ReadProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(void *), &written)) {
-        set_errmsg("ReadProcessMemory error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)data.call_addres, NULL, 0, NULL);
-    if (hThread == NULL) {
-        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
-    WaitForSingleObject(hThread, INFINITE);
-    GetExitCodeThread(hThread, &err);
-    CloseHandle(hThread);
-    if (err != 0) {
-        set_errmsg("Run '%s' in the target process failed: %s", name, w32strerr(err));
-        return INJERR_ERROR_IN_TARGET;
-    }
-    
     return 0;
 }
 

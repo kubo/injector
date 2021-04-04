@@ -150,6 +150,27 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     return 0;
 }
 
+int injector_call(injector_t *injector, void *handle, const char* name)
+{
+    int rv;
+    long retval;
+    size_t len = strlen(name) + 1;
+    if (len > injector->text_size) {
+        injector__set_errmsg("too long function name: %s", name);
+        return INJERR_FUNCTION_MISSING;
+    }
+    rv = injector__write(injector, injector->text, name, len);
+    if (rv != 0) {
+        return rv;
+    }
+    rv = injector__call_function(injector, &retval, injector->dlsym_addr, handle, injector->text);
+    if (retval == 0) {
+        injector__set_errmsg("function not found: %s", name);
+        return INJERR_FUNCTION_MISSING;
+    }
+    return injector__call_function(injector, &retval, retval);
+}
+
 int injector_uninject(injector_t *injector, void *handle)
 {
     int rv;

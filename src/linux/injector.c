@@ -136,7 +136,8 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     if (rv != 0) {
         return rv;
     }
-    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->text, RTLD_LAZY);
+#define __RTLD_DLOPEN	0x80000000 // glibc internal flag
+    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->text, RTLD_LAZY | __RTLD_DLOPEN);
     if (rv != 0) {
         return rv;
     }

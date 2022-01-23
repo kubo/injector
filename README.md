@@ -1,6 +1,6 @@
 # Injector
 
-[![Build Status](https://travis-ci.com/kubo/injector.svg?branch=master)](https://travis-ci.com/kubo/injector)
+[![tests](https://github.com/kubo/injector/actions/workflows/test.yml/badge.svg)](https://github.com/kubo/injector/actions/workflows/test.yml)
 
 **Library for injecting a shared library into a Linux or Windows process**
 
@@ -131,14 +131,14 @@ injector process \ target process | x86_64 | i386 | x32(*1)
 
 injector process \ target process | arm64 | armhf | armel
 ---|---|---|---
-**arm64** | success(*4) | success | success
+**arm64** | success     | success | success
 **armhf** | failure(*2) | success | success
 **armel** | failure(*2) | success | success
 
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
-*4: tested on travis-ci  
+*4: tested on github actions  
 
 ## Windows
 
@@ -149,7 +149,7 @@ injector process \ target process | x64 | x86 | arm64
 **arm64**   | -           | -           | not tested(*3)
 
 *1: failure with `x64 target process isn't supported by x86 process`.  
-*2: tested on travis-ci  
+*2: tested on github actions  
 *3: It may work though I have not tested it. Let me know if it really works.
 
 # Caveats

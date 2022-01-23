@@ -1,0 +1,44 @@
+name: tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests_on_ubuntu_x86_64:
+    name: Tests on Ubuntu (x86_64 and i686)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Install packages
+      run: |
+        sudo apt install -y gcc-multilib
+    - name: run tests
+      run: |
+        make check
+
+  tests_on_windows:
+    name: Tests on Windows (x64 and x86)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: x64 -> x64 tests on Windows
+      shell: cmd
+      run: |
+        call "c:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
+        nmake -nologo -f Makefile.win32 check
+        if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+        copy tests\test-prog.exe tests\test-prog-x64.exe 
+        nmake -nologo -f Makefile.win32 clean
+    - name: x86 -> x86 tests on Windows
+      shell: cmd
+      run: |
+        call "c:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86
+        nmake -nologo -f Makefile.win32 check
+    - name: x64 -> x86 tests on Windows
+      shell: cmd
+      run: |
+        cd tests && .\test-prog-x64.exe

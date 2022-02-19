@@ -24,6 +24,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <regex.h>
 #include <elf.h>
 #include "injector_internal.h"
 
@@ -244,6 +245,8 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
 {
     char buf[512];
     FILE *fp = NULL;
+    regex_t reg;
+    regmatch_t match;
 
     sprintf(buf, "/proc/%d/maps", pid);
     fp = fopen(buf, "r");
@@ -251,19 +254,20 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         injector__set_errmsg("failed to open %s. (error: %s)", buf, strerror(errno));
         return INJERR_OTHER;
     }
+    /* /libc.so.6 or /libc-2.{DIGITS}.so */
+    if (regcomp(&reg, "/libc(\\.so\\.6|-2\\.[0-9]+\\.so)", REG_EXTENDED) != 0) {
+        injector__set_errmsg("regcomp failed!");
+        return INJERR_OTHER;
+    }
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         unsigned long saddr, eaddr;
         if (sscanf(buf, "%lx-%lx r-xp", &saddr, &eaddr) == 2) {
-            char *p = strstr(buf, "/libc-2.");
-            if (p != NULL) {
-                char *libc_path;
-                char *endptr;
-                p += strlen("/libc-2.");
-                strtol(p, &endptr, 10);
-                if (strcmp(endptr, ".so\n") == 0) {
-                    endptr[3] = '\0'; /* terminate with nul at '\n'. */
+            if (regexec(&reg, buf, 1, &match, 0) == 0) {
+                char *p = buf + match.rm_eo;
+                if (strcmp(p, "\n") == 0) {
+                    char *libc_path = strchr(buf, '/');
                     fclose(fp);
-                    libc_path = strchr(buf, '/');
+                    *p = '\0';
                     fp = fopen(libc_path, "r");
                     if (fp == NULL) {
                         p = strstr(libc_path, "/rootfs/"); /* under LXD */
@@ -273,14 +277,17 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
                     }
                     if (fp == NULL) {
                         injector__set_errmsg("failed to open %s. (error: %s)", libc_path, strerror(errno));
+                        regfree(&reg);
                         return INJERR_NO_LIBRARY;
                     }
                     *addr = saddr;
                     *fp_out = fp;
+                    regfree(&reg);
                     return 0;
-                } else if (strcmp(endptr, ".so (deleted)\n") == 0) {
+                } else if (strcmp(p, ".so (deleted)\n") == 0) {
                     injector__set_errmsg("The C library when the process started was removed");
                     fclose(fp);
+                    regfree(&reg);
                     return INJERR_NO_LIBRARY;
                 }
             }
@@ -288,6 +295,7 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");
+    regfree(&reg);
     return INJERR_NO_LIBRARY;
 }
 

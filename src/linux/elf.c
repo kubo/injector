@@ -56,6 +56,7 @@ int injector__collect_libc_information(injector_t *injector)
     size_t str_size = 0;
     size_t sym_offset = 0;
     size_t sym_num = 0;
+    int use_internal_dlfunc = 0;
     size_t sym_entsize = 0;
     size_t dlopen_st_name;
     size_t dlopen_offset;
@@ -124,9 +125,14 @@ int injector__collect_libc_information(injector_t *injector)
         goto cleanup;
     }
 
-    dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlopen_mode");
+    dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "dlopen");
     if (dlopen_st_name == 0) {
-        injector__set_errmsg("failed to find __libc_dlopen_mode in the .dynstr section.");
+        /* glibc 2.33 or earlier */
+        use_internal_dlfunc = 1;
+        dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlopen_mode");
+    }
+    if (dlopen_st_name == 0) {
+        injector__set_errmsg("failed to find dlopen/__libc_dlopen_mode in the .dynstr section.");
         rv = INJERR_NO_FUNCTION;
         goto cleanup;
     }
@@ -143,9 +149,13 @@ int injector__collect_libc_information(injector_t *injector)
         }
     }
 
-    dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlclose");
+    if (!use_internal_dlfunc) {
+        dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "dlclose");
+    } else {
+        dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlclose");
+    }
     if (dlclose_st_name == 0) {
-        injector__set_errmsg("failed to find __libc_dlclose in the .dynstr section.");
+        injector__set_errmsg("failed to find dlclose/__libc_dlclose in the .dynstr section.");
         rv = INJERR_NO_FUNCTION;
         goto cleanup;
     }
@@ -161,10 +171,14 @@ int injector__collect_libc_information(injector_t *injector)
             break;
         }
     }
-    
-    dlsym_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlsym");
+
+    if (!use_internal_dlfunc) {
+        dlsym_st_name = find_strtab_offset(fp, str_offset, str_size, "dlsym");
+    } else {
+        dlsym_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlsym");
+    }
     if (dlsym_st_name == 0) {
-        injector__set_errmsg("failed to find __libc_dlsym  in the .dynstr section.");
+        injector__set_errmsg("failed to find dlsym/__libc_dlsym  in the .dynstr section.");
         rv = INJERR_NO_FUNCTION;
         goto cleanup;
     }
@@ -181,6 +195,7 @@ int injector__collect_libc_information(injector_t *injector)
         }
     }
 
+    injector->use_internal_dlfunc = use_internal_dlfunc;
     injector->dlopen_addr = libc_addr + dlopen_offset;
     injector->dlclose_addr = libc_addr + dlclose_offset;
     injector->dlsym_addr = libc_addr + dlsym_offset;

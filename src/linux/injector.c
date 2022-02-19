@@ -114,6 +114,7 @@ error_exit:
 int injector_inject(injector_t *injector, const char *path, void **handle)
 {
     char abspath[PATH_MAX];
+    int dlflags = RTLD_LAZY;
     size_t len;
     int rv;
     long retval;
@@ -136,8 +137,11 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     if (rv != 0) {
         return rv;
     }
+    if (injector->use_internal_dlfunc) {
 #define __RTLD_DLOPEN	0x80000000 // glibc internal flag
-    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->text, RTLD_LAZY | __RTLD_DLOPEN);
+        dlflags |= __RTLD_DLOPEN;
+    }
+    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->text, dlflags);
     if (rv != 0) {
         return rv;
     }

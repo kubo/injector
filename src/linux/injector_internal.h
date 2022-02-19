@@ -71,6 +71,7 @@ struct injector {
     uint8_t mmapped;
     arch_t arch;
     struct user_regs_struct regs;
+    int use_internal_dlfunc; /* true if glibc 2.33 or earlier */
     size_t dlopen_addr;
     size_t dlclose_addr;
     size_t dlsym_addr;

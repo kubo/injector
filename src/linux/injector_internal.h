@@ -82,6 +82,7 @@ struct injector {
     size_t dlopen_addr;
     size_t dlclose_addr;
     size_t dlsym_addr;
+    size_t dlerror_addr;
     size_t code_addr; /* address where instructions are written */
     code_t backup_code;
     long sys_mmap;

@@ -141,6 +141,15 @@ int injector__collect_libc_information(injector_t *injector)
         goto cleanup;
     }
 
+    if (prm.dlfunc_type != DLFUNC_INTERNAL) {
+        rv = find_symbol_addr(&injector->dlerror_addr, &prm, "dlerror", NULL);
+        if (rv != 0) {
+            goto cleanup;
+        }
+    } else {
+        injector->dlerror_addr = 0;
+    }
+
     injector->dlfunc_type = prm.dlfunc_type;
     injector->code_addr = prm.libc_addr + ehdr.e_entry;
 

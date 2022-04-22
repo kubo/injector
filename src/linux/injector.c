@@ -146,7 +146,18 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
         return rv;
     }
     if (retval == 0) {
-        injector__set_errmsg("dlopen failed");
+        char buf[256 + 1] = {0,};
+        if (injector->dlerror_addr != 0) {
+            rv = injector__call_function(injector, &retval, injector->dlerror_addr);
+            if (rv == 0 && retval != 0) {
+                injector__read(injector, retval, buf, sizeof(buf) - 1);
+            }
+        }
+        if (buf[0] != '\0') {
+            injector__set_errmsg("dlopen failed: %s", buf);
+        } else {
+            injector__set_errmsg("dlopen failed");
+        }
         return INJERR_ERROR_IN_TARGET;
     }
     if (handle != NULL) {

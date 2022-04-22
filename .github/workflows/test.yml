@@ -25,18 +25,22 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    - uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
     - name: x64 -> x64 tests on Windows
       shell: cmd
       run: |
-        call "c:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" amd64
         nmake -nologo -f Makefile.win32 check
         if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
         copy tests\test-prog.exe tests\test-prog-x64.exe 
         nmake -nologo -f Makefile.win32 clean
+    - uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
     - name: x86 -> x86 tests on Windows
       shell: cmd
       run: |
-        call "c:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x86
         nmake -nologo -f Makefile.win32 check
     - name: x64 -> x86 tests on Windows
       shell: cmd

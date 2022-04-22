@@ -46,7 +46,7 @@ static pid_t find_process(const char *name)
         exit(1);
     }
     while ((dent = readdir(dir)) != NULL) {
-        char path[40];
+        char path[sizeof(dent->d_name) + 11];
         char exepath[PATH_MAX];
         ssize_t len;
         char *exe;

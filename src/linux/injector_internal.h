@@ -51,6 +51,13 @@
 } while (0)
 
 typedef enum {
+    /* use dlopen/dlsym/dlclose (glibc 2.34 or later) */
+    DLFUNC_POSIX,
+    /* use __libc_dlopen_mode/__libc_dlsym/__libc_dlclose" (glibc 2.33 or earlier) */
+    DLFUNC_INTERNAL,
+} dlfunc_type_t;
+
+typedef enum {
     ARCH_X86_64,
     ARCH_X86_64_X32,
     ARCH_I386,
@@ -71,7 +78,7 @@ struct injector {
     uint8_t mmapped;
     arch_t arch;
     struct user_regs_struct regs;
-    int use_internal_dlfunc; /* true if glibc 2.33 or earlier */
+    dlfunc_type_t dlfunc_type;
     size_t dlopen_addr;
     size_t dlclose_addr;
     size_t dlsym_addr;

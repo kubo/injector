@@ -38,37 +38,36 @@
 #define Elf_Sym Elf32_Sym
 #endif
 
+typedef struct {
+    int dlfunc_type; /* -1, DLFUNC_POSIX or DLFUNC_INTERNAL */
+    FILE *fp;
+    size_t libc_addr;
+    size_t str_offset;
+    size_t str_size;
+    size_t sym_offset;
+    size_t sym_num;
+    size_t sym_entsize;
+} param_t;
+
 static int open_libc(FILE **fp_out, pid_t pid, size_t *addr);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
 static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size);
-static size_t find_strtab_offset(FILE *fp, size_t offset, size_t size, const char *name);
+static int find_symbol_addr(size_t *addr, param_t *prm, const char *posix_name, const char *internal_name);
+static size_t find_strtab_offset(const param_t *prm, const char *name);
 
 int injector__collect_libc_information(injector_t *injector)
 {
     pid_t pid = injector->pid;
     FILE *fp;
-    size_t libc_addr;
     Elf_Ehdr ehdr;
     Elf_Shdr shdr;
+    param_t prm = {-1, };
     size_t shstrtab_offset;
-    size_t str_offset = 0;
-    size_t str_size = 0;
-    size_t sym_offset = 0;
-    size_t sym_num = 0;
-    int use_internal_dlfunc = 0;
-    size_t sym_entsize = 0;
-    size_t dlopen_st_name;
-    size_t dlopen_offset;
-    size_t dlclose_st_name;
-    size_t dlclose_offset;
-    size_t dlsym_st_name;
-    size_t dlsym_offset;
-    Elf_Sym sym;
     int idx;
     int rv;
 
-    rv = open_libc(&fp, pid, &libc_addr);
+    rv = open_libc(&fp, pid, &prm.libc_addr);
     if (rv != 0) {
         return rv;
     }
@@ -99,8 +98,8 @@ int injector__collect_libc_information(injector_t *injector)
             fgets(buf, sizeof(buf), fp);
             fsetpos(fp, &pos);
             if (strcmp(buf, ".dynstr") == 0) {
-                str_offset = shdr.sh_offset;
-                str_size = shdr.sh_size;
+                prm.str_offset = shdr.sh_offset;
+                prm.str_size = shdr.sh_size;
             }
             break;
         case SHT_DYNSYM:
@@ -109,13 +108,13 @@ int injector__collect_libc_information(injector_t *injector)
             fgets(buf, sizeof(buf), fp);
             fsetpos(fp, &pos);
             if (strcmp(buf, ".dynsym") == 0) {
-                sym_offset = shdr.sh_offset;
-                sym_entsize = shdr.sh_entsize;
-                sym_num = shdr.sh_size / shdr.sh_entsize;
+                prm.sym_offset = shdr.sh_offset;
+                prm.sym_entsize = shdr.sh_entsize;
+                prm.sym_num = shdr.sh_size / shdr.sh_entsize;
             }
             break;
         }
-        if (sym_offset != 0 && str_offset != 0) {
+        if (prm.sym_offset != 0 && prm.str_offset != 0) {
             break;
         }
     }
@@ -125,81 +124,25 @@ int injector__collect_libc_information(injector_t *injector)
         goto cleanup;
     }
 
-    dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "dlopen");
-    if (dlopen_st_name == 0) {
-        /* glibc 2.33 or earlier */
-        use_internal_dlfunc = 1;
-        dlopen_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlopen_mode");
-    }
-    if (dlopen_st_name == 0) {
-        injector__set_errmsg("failed to find dlopen/__libc_dlopen_mode in the .dynstr section.");
-        rv = INJERR_NO_FUNCTION;
+    prm.fp = fp;
+
+    rv = find_symbol_addr(&injector->dlopen_addr, &prm, "dlopen", "__libc_dlopen_mode");
+    if (rv != 0) {
         goto cleanup;
     }
 
-    fseek(fp, sym_offset, SEEK_SET);
-    for (idx = 0; idx < sym_num; idx++) {
-        rv = read_elf_sym(fp, &sym, sym_entsize);
-        if (rv != 0) {
-            goto cleanup;
-        }
-        if (sym.st_name == dlopen_st_name) {
-            dlopen_offset = sym.st_value;
-            break;
-        }
-    }
-
-    if (!use_internal_dlfunc) {
-        dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "dlclose");
-    } else {
-        dlclose_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlclose");
-    }
-    if (dlclose_st_name == 0) {
-        injector__set_errmsg("failed to find dlclose/__libc_dlclose in the .dynstr section.");
-        rv = INJERR_NO_FUNCTION;
+    rv = find_symbol_addr(&injector->dlclose_addr, &prm, "dlclose", "__libc_dlclose");
+    if (rv != 0) {
         goto cleanup;
     }
 
-    fseek(fp, sym_offset, SEEK_SET);
-    for (idx = 0; idx < sym_num; idx++) {
-        rv = read_elf_sym(fp, &sym, sym_entsize);
-        if (rv != 0) {
-            goto cleanup;
-        }
-        if (sym.st_name == dlclose_st_name) {
-            dlclose_offset = sym.st_value;
-            break;
-        }
-    }
-
-    if (!use_internal_dlfunc) {
-        dlsym_st_name = find_strtab_offset(fp, str_offset, str_size, "dlsym");
-    } else {
-        dlsym_st_name = find_strtab_offset(fp, str_offset, str_size, "__libc_dlsym");
-    }
-    if (dlsym_st_name == 0) {
-        injector__set_errmsg("failed to find dlsym/__libc_dlsym  in the .dynstr section.");
-        rv = INJERR_NO_FUNCTION;
+    rv = find_symbol_addr(&injector->dlsym_addr, &prm, "dlsym", "__libc_dlsym");
+    if (rv != 0) {
         goto cleanup;
     }
 
-    fseek(fp, sym_offset, SEEK_SET);
-    for (idx = 0; idx < sym_num; idx++) {
-        rv = read_elf_sym(fp, &sym, sym_entsize);
-        if (rv != 0) {
-            goto cleanup;
-        }
-        if (sym.st_name == dlsym_st_name) {
-            dlsym_offset = sym.st_value;
-            break;
-        }
-    }
-
-    injector->use_internal_dlfunc = use_internal_dlfunc;
-    injector->dlopen_addr = libc_addr + dlopen_offset;
-    injector->dlclose_addr = libc_addr + dlclose_offset;
-    injector->dlsym_addr = libc_addr + dlsym_offset;
-    injector->code_addr = libc_addr + ehdr.e_entry;
+    injector->dlfunc_type = prm.dlfunc_type;
+    injector->code_addr = prm.libc_addr + ehdr.e_entry;
 
     switch (ehdr.e_machine) {
     case EM_X86_64:
@@ -404,14 +347,59 @@ static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size)
     return 0;
 }
 
-static size_t find_strtab_offset(FILE *fp, size_t offset, size_t size, const char *name)
+static int find_symbol_addr(size_t *addr, param_t *prm, const char *posix_name, const char *internal_name)
+{
+    size_t st_name;
+
+    switch (prm->dlfunc_type) {
+    case -1:
+        st_name = find_strtab_offset(prm, posix_name);
+        if (st_name != 0) {
+            prm->dlfunc_type = DLFUNC_POSIX;
+        } else {
+            prm->dlfunc_type = DLFUNC_INTERNAL;
+            st_name = find_strtab_offset(prm, internal_name);
+        }
+        break;
+    case DLFUNC_POSIX:
+        st_name = find_strtab_offset(prm, posix_name);
+        break;
+    case DLFUNC_INTERNAL:
+        st_name = find_strtab_offset(prm, internal_name);
+        break;
+    }
+
+    if (st_name != 0) {
+        Elf_Sym sym;
+        int idx;
+        int rv;
+
+        fseek(prm->fp, prm->sym_offset, SEEK_SET);
+        for (idx = 0; idx < prm->sym_num; idx++) {
+            rv = read_elf_sym(prm->fp, &sym, prm->sym_entsize);
+            if (rv != 0) {
+                return rv;
+            }
+            if (sym.st_name == st_name) {
+                *addr = prm->libc_addr + sym.st_value;
+                return 0;
+            }
+        }
+    }
+    injector__set_errmsg("failed to find %s%s%s in the .dynstr section.",
+                         posix_name, internal_name ? "/" : "",
+                         internal_name ? internal_name : "");
+    return INJERR_NO_FUNCTION;
+}
+
+static size_t find_strtab_offset(const param_t *prm, const char *name)
 {
     size_t off;
     size_t idx = 0;
 
-    fseek(fp, offset, SEEK_SET);
-    for (off = 0; off < size; off++) {
-        int c = fgetc(fp);
+    fseek(prm->fp, prm->str_offset, SEEK_SET);
+    for (off = 0; off < prm->str_size; off++) {
+        int c = fgetc(prm->fp);
         if (c == EOF) {
             return 0;
         }

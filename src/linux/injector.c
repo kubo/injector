@@ -137,7 +137,7 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     if (rv != 0) {
         return rv;
     }
-    if (injector->use_internal_dlfunc) {
+    if (injector->dlfunc_type == DLFUNC_INTERNAL) {
 #define __RTLD_DLOPEN	0x80000000 // glibc internal flag
         dlflags |= __RTLD_DLOPEN;
     }

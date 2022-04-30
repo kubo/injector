@@ -146,7 +146,7 @@ injector process \ target process | x64 | x86 | arm64
 ---|---|---|---
 **x64**     | success(*2) | success(*2) | -
 **x86**     | failure(*1) | success(*2) | -
-**arm64**   | -           | -           | not tested(*3)
+**arm64**   | -           | success           | not tested(*3)
 
 *1: failure with `x64 target process isn't supported by x86 process`.  
 *2: tested on github actions  

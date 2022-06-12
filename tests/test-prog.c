@@ -307,7 +307,7 @@ int main(int argc, char **argv)
                 goto cleanup;
             }
             errmsg = injector_error();
-            if (strcmp(errmsg, INJECT_ERRMSG) != 0) {
+            if (strncmp(errmsg, INJECT_ERRMSG, strlen(INJECT_ERRMSG)) != 0) {
                 printf("unexpected injection error message: %s\n", errmsg);
                 goto cleanup;
             }

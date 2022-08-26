@@ -52,11 +52,13 @@
 #define INJECT_ERRMSG "dlopen failed"
 #endif
 
+#define MUSL_INJECT_ERRMSG "failed to get the full path of 'no such library': No such file or directory"
+
 typedef struct process process_t;
 
 static int process_start(process_t *proc, char *test_target);
 static int process_check_module(process_t *proc, const char *module_name);
-static int process_wait(process_t *proc, int wait_secs);
+static int process_wait(process_t *proc, int wait_secs, int is_musl);
 static void process_terminate(process_t *proc);
 
 #ifdef _WIN32
@@ -110,7 +112,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     return 1;
 }
 
-static int process_wait(process_t *proc, int wait_secs)
+static int process_wait(process_t *proc, int wait_secs, int is_musl)
 {
     DWORD code;
     int rv = 1;
@@ -199,7 +201,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     return 1;
 }
 
-static int process_wait(process_t *proc, int wait_secs)
+static int process_wait(process_t *proc, int wait_secs, int is_musl)
 {
     struct sigaction sigact;
     int status;
@@ -214,11 +216,21 @@ static int process_wait(process_t *proc, int wait_secs)
         if (WIFEXITED(status)) {
             int exitcode = WEXITSTATUS(status);
             if (exitcode == INCR_ON_INJECTION + INCR_ON_UNINJECTION) {
-                printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
-                return 0;
+                if (is_musl) {
+                    printf("ERROR: the library was uninjected, which shouldn't be possible on musl.\n");
+                    return 0;
+                } else {
+                    printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
+                    return 0;
+                }
             } else if (exitcode == INCR_ON_INJECTION) {
-                printf("ERROR: The library was injected but not uninjected.\n");
-                return 1;
+                if (is_musl) {
+                    printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
+                    return 0;
+                } else {
+                    printf("ERROR: The library was injected but not uninjected.\n");
+                    return 1;
+                }
             } else if (exitcode == 0) {
                 printf("ERROR: The injected library didn't change the return value of target process!\n");
                 return 1;
@@ -249,9 +261,11 @@ static int process_wait(process_t *proc, int wait_secs)
 
 static void process_terminate(process_t *proc)
 {
+    int status;
     if (!proc->waited) {
         kill(proc->pid, SIGKILL);
         kill(proc->pid, SIGCONT);
+        waitpid(proc->pid, &status, 0);
     }
 }
 
@@ -267,6 +281,8 @@ int main(int argc, char **argv)
     void *handle = NULL;
     int rv = 1;
     int loop_cnt;
+    // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
+    int is_musl;
 
     if (argc > 1) {
         snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
@@ -279,7 +295,8 @@ int main(int argc, char **argv)
     if (process_start(&proc, test_target) != 0) {
         return 1;
     }
-    printf("targe process started.\n");
+    is_musl = process_check_module(&proc, "/ld-musl-") == 1;
+    printf("target process started.\n");
     fflush(stdout);
 
     sleep(1);
@@ -302,12 +319,12 @@ int main(int argc, char **argv)
             printf("injected. (handle=%p)\n", handle);
             fflush(stdout);
 
-            if (injector_inject(injector, "Makefile", &handle) == 0) {
+            if (injector_inject(injector, "no such library", &handle) == 0) {
                 printf("injection should fail but succeeded:\n");
                 goto cleanup;
             }
             errmsg = injector_error();
-            if (strcmp(errmsg, INJECT_ERRMSG) != 0) {
+            if (strcmp(errmsg, is_musl ? MUSL_INJECT_ERRMSG : INJECT_ERRMSG) != 0) {
                 printf("unexpected injection error message: %s\n", errmsg);
                 goto cleanup;
             }
@@ -339,7 +356,8 @@ int main(int argc, char **argv)
         printf("detached.\n");
         fflush(stdout);
 
-        if (process_check_module(&proc, test_library) != loop_cnt) {
+        // In musl, dlclose doesn't do anything - see https://wiki.musl-libc.org/functional-differences-from-glibc.html
+        if (!is_musl && process_check_module(&proc, test_library) != loop_cnt) {
             if (loop_cnt == 0) {
                 printf("%s wasn't found after injection\n", test_library);
             } else {
@@ -349,7 +367,7 @@ int main(int argc, char **argv)
         }
     }
 
-    rv = process_wait(&proc, 6);
+    rv = process_wait(&proc, 6, is_musl);
 cleanup:
     process_terminate(&proc);
     return rv;

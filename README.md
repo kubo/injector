@@ -138,7 +138,7 @@ injector process \ target process | arm64 | armhf | armel
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
-*4: tested on github actions  
+*4: tested on github actions on both glibc and musl
 
 ## Windows
 

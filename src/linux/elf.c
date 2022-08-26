@@ -221,8 +221,8 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         injector__set_errmsg("failed to open %s. (error: %s)", buf, strerror(errno));
         return INJERR_OTHER;
     }
-    /* /libc.so.6 or /libc-2.{DIGITS}.so */
-    if (regcomp(&reg, "/libc(\\.so\\.6|-2\\.[0-9]+\\.so)", REG_EXTENDED) != 0) {
+    /* /libc.so.6 or /libc-2.{DIGITS}.so or /lib/ld-musl-{arch}.so.1 */
+    if (regcomp(&reg, "/libc(\\.so\\.6|-2\\.[0-9]+\\.so)|/ld-musl-.+?\\.so\\.1", REG_EXTENDED) != 0) {
         injector__set_errmsg("regcomp failed!");
         return INJERR_OTHER;
     }

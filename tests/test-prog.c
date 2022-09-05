@@ -283,6 +283,7 @@ int main(int argc, char **argv)
     int loop_cnt;
     // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
     int is_musl;
+    char *expected_errmsg;
 
     if (argc > 1) {
         snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
@@ -296,6 +297,7 @@ int main(int argc, char **argv)
         return 1;
     }
     is_musl = process_check_module(&proc, "/ld-musl-") == 1;
+    expected_errmsg = is_musl ? MUSL_INJECT_ERRMSG : INJECT_ERRMSG;
     printf("target process started.\n");
     fflush(stdout);
 
@@ -324,7 +326,7 @@ int main(int argc, char **argv)
                 goto cleanup;
             }
             errmsg = injector_error();
-            if (strcmp(errmsg, is_musl ? MUSL_INJECT_ERRMSG : INJECT_ERRMSG) != 0) {
+            if (strncmp(errmsg, expected_errmsg, strlen(expected_errmsg)) != 0) {
                 printf("unexpected injection error message: %s\n", errmsg);
                 goto cleanup;
             }

@@ -48,7 +48,7 @@ jobs:
         cd tests && .\test-prog-x64.exe
 
   tests_on_alpine_x86_64:
-    name: Tests on Alpine (x86_64 and i686)
+    name: Tests on Alpine (x86_64 only)
     runs-on: ubuntu-latest
     container: alpine
     steps:

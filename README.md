@@ -125,7 +125,7 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
 injector process \ target process | x86_64 | i386 | x32(*1)
 ---|---|---|---
-**x86_64** | success(*4) | success(*4) | success(*4)
+**x86_64** | success(*5) | success(*4) | success(*4)
 **i386**   | failure(*2) | success(*4) | failure(*3)
 **x32**(*1) | failure(*2) | success(*4) | failure(*3)
 
@@ -138,7 +138,9 @@ injector process \ target process | arm64 | armhf | armel
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
-*4: tested on github actions on both glibc and musl
+*4: tested on github actions with glibc.  
+*5: tested on github actions with both glibc and musl.  
+
 
 ## Windows
 

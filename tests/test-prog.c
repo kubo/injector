@@ -57,7 +57,7 @@
 typedef struct process process_t;
 
 static int process_start(process_t *proc, char *test_target);
-static int process_check_module(process_t *proc, const char *module_name);
+static int process_check_module(process_t *proc, const char *module_name, int startswith);
 static int process_wait(process_t *proc, int wait_secs, int is_musl);
 static void process_terminate(process_t *proc);
 
@@ -85,11 +85,12 @@ static int process_start(process_t *proc, char *test_target)
     return 0;
 }
 
-static int process_check_module(process_t *proc, const char *module_name)
+static int process_check_module(process_t *proc, const char *module_name, int startswith)
 {
     HANDLE hSnapshot;
     MODULEENTRY32 me;
     BOOL ok;
+    int len = strlen(module_name);
 
     do {
         hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, proc->pid);
@@ -102,7 +103,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     me.dwSize = sizeof(me);
     ok = Module32First(hSnapshot, &me);
     while (ok) {
-        if (stricmp(me.szModule, module_name) == 0) {
+        if ((startswith ? memicmp(me.szModule, module_name, len) : stricmp(me.szModule, module_name)) == 0) {
             CloseHandle(hSnapshot);
             return 0;
         }
@@ -178,7 +179,7 @@ static int process_start(process_t *proc, char *test_target)
     return 0;
 }
 
-static int process_check_module(process_t *proc, const char *module_name)
+static int process_check_module(process_t *proc, const char *module_name, int startswith)
 {
     char buf[PATH_MAX];
     size_t len = strlen(module_name);
@@ -192,7 +193,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     }
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         char *p = strrchr(buf, '/');
-        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && p[len + 1] == '\n') {
+        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && (startswith || p[len + 1] == '\n')) {
             fclose(fp);
             return 0;
         }
@@ -296,7 +297,7 @@ int main(int argc, char **argv)
     if (process_start(&proc, test_target) != 0) {
         return 1;
     }
-    is_musl = process_check_module(&proc, "/ld-musl-") == 1;
+    is_musl = process_check_module(&proc, "ld-musl-", 1) == 0;
     expected_errmsg = is_musl ? MUSL_INJECT_ERRMSG : INJECT_ERRMSG;
     printf("target process started.\n");
     fflush(stdout);
@@ -327,7 +328,7 @@ int main(int argc, char **argv)
             }
             errmsg = injector_error();
             if (strncmp(errmsg, expected_errmsg, strlen(expected_errmsg)) != 0) {
-                printf("unexpected injection error message: %s\n", errmsg);
+                printf("unexpected injection error message: %s\nexpected: %s\n", errmsg, expected_errmsg);
                 goto cleanup;
             }
         } else {
@@ -359,7 +360,7 @@ int main(int argc, char **argv)
         fflush(stdout);
 
         // In musl, dlclose doesn't do anything - see https://wiki.musl-libc.org/functional-differences-from-glibc.html
-        if (!is_musl && process_check_module(&proc, test_library) != loop_cnt) {
+        if (!is_musl && process_check_module(&proc, test_library, 0) != loop_cnt) {
             if (loop_cnt == 0) {
                 printf("%s wasn't found after injection\n", test_library);
             } else {

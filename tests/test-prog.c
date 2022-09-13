@@ -49,10 +49,8 @@
 #else
 #define EXEEXT ""
 #define DLLEXT ".so"
-#define INJECT_ERRMSG "dlopen failed"
+#define INJECT_ERRMSG "failed to get the full path of 'no such library': No such file or directory"
 #endif
-
-#define MUSL_INJECT_ERRMSG "failed to get the full path of 'no such library': No such file or directory"
 
 typedef struct process process_t;
 
@@ -284,7 +282,6 @@ int main(int argc, char **argv)
     int rv = 1;
     int loop_cnt;
     int can_uninject;
-    char *expected_errmsg;
 
     if (argc > 1) {
         snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
@@ -303,12 +300,10 @@ int main(int argc, char **argv)
     sleep(1);
 
 #ifdef _WIN32
-    expected_errmsg = INJECT_ERRMSG;
     can_uninject = 1;
 #else
     // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
     proc.is_musl = process_check_module(&proc, "ld-musl-", 1) == 0;
-    expected_errmsg = proc.is_musl ? MUSL_INJECT_ERRMSG : INJECT_ERRMSG;
     // In musl, dlclose doesn't do anything - see https://wiki.musl-libc.org/functional-differences-from-glibc.html
     can_uninject = proc.is_musl ? 0 : 1;
 #endif
@@ -336,8 +331,8 @@ int main(int argc, char **argv)
                 goto cleanup;
             }
             errmsg = injector_error();
-            if (strncmp(errmsg, expected_errmsg, strlen(expected_errmsg)) != 0) {
-                printf("unexpected injection error message: %s\nexpected: %s\n", errmsg, expected_errmsg);
+            if (strncmp(errmsg, INJECT_ERRMSG, strlen(INJECT_ERRMSG)) != 0) {
+                printf("unexpected injection error message: %s\nexpected: %s\n", errmsg, INJECT_ERRMSG);
                 goto cleanup;
             }
         } else {

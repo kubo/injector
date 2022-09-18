@@ -49,13 +49,13 @@
 #else
 #define EXEEXT ""
 #define DLLEXT ".so"
-#define INJECT_ERRMSG "dlopen failed"
+#define INJECT_ERRMSG "failed to get the full path of 'no such library': No such file or directory"
 #endif
 
 typedef struct process process_t;
 
 static int process_start(process_t *proc, char *test_target);
-static int process_check_module(process_t *proc, const char *module_name);
+static int process_check_module(process_t *proc, const char *module_name, int startswith);
 static int process_wait(process_t *proc, int wait_secs);
 static void process_terminate(process_t *proc);
 
@@ -83,11 +83,12 @@ static int process_start(process_t *proc, char *test_target)
     return 0;
 }
 
-static int process_check_module(process_t *proc, const char *module_name)
+static int process_check_module(process_t *proc, const char *module_name, int startswith)
 {
     HANDLE hSnapshot;
     MODULEENTRY32 me;
     BOOL ok;
+    int len = strlen(module_name);
 
     do {
         hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, proc->pid);
@@ -100,7 +101,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     me.dwSize = sizeof(me);
     ok = Module32First(hSnapshot, &me);
     while (ok) {
-        if (stricmp(me.szModule, module_name) == 0) {
+        if ((startswith ? memicmp(me.szModule, module_name, len) : stricmp(me.szModule, module_name)) == 0) {
             CloseHandle(hSnapshot);
             return 0;
         }
@@ -156,6 +157,7 @@ static void process_terminate(process_t *proc)
 struct process {
     pid_t pid;
     int waited;
+    int is_musl;
 };
 
 static volatile sig_atomic_t caught_sigalarm;
@@ -176,7 +178,7 @@ static int process_start(process_t *proc, char *test_target)
     return 0;
 }
 
-static int process_check_module(process_t *proc, const char *module_name)
+static int process_check_module(process_t *proc, const char *module_name, int startswith)
 {
     char buf[PATH_MAX];
     size_t len = strlen(module_name);
@@ -190,7 +192,7 @@ static int process_check_module(process_t *proc, const char *module_name)
     }
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         char *p = strrchr(buf, '/');
-        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && p[len + 1] == '\n') {
+        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && (startswith || p[len + 1] == '\n')) {
             fclose(fp);
             return 0;
         }
@@ -214,11 +216,21 @@ static int process_wait(process_t *proc, int wait_secs)
         if (WIFEXITED(status)) {
             int exitcode = WEXITSTATUS(status);
             if (exitcode == INCR_ON_INJECTION + INCR_ON_UNINJECTION) {
-                printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
-                return 0;
+                if (proc->is_musl) {
+                    printf("ERROR: the library was uninjected, which shouldn't be possible on musl.\n");
+                    return 0;
+                } else {
+                    printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
+                    return 0;
+                }
             } else if (exitcode == INCR_ON_INJECTION) {
-                printf("ERROR: The library was injected but not uninjected.\n");
-                return 1;
+                if (proc->is_musl) {
+                    printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
+                    return 0;
+                } else {
+                    printf("ERROR: The library was injected but not uninjected.\n");
+                    return 1;
+                }
             } else if (exitcode == 0) {
                 printf("ERROR: The injected library didn't change the return value of target process!\n");
                 return 1;
@@ -249,9 +261,11 @@ static int process_wait(process_t *proc, int wait_secs)
 
 static void process_terminate(process_t *proc)
 {
+    int status;
     if (!proc->waited) {
         kill(proc->pid, SIGKILL);
         kill(proc->pid, SIGCONT);
+        waitpid(proc->pid, &status, 0);
     }
 }
 
@@ -267,6 +281,7 @@ int main(int argc, char **argv)
     void *handle = NULL;
     int rv = 1;
     int loop_cnt;
+    int can_uninject;
 
     if (argc > 1) {
         snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
@@ -279,10 +294,19 @@ int main(int argc, char **argv)
     if (process_start(&proc, test_target) != 0) {
         return 1;
     }
-    printf("targe process started.\n");
+    printf("target process started.\n");
     fflush(stdout);
 
     sleep(1);
+
+#ifdef _WIN32
+    can_uninject = 1;
+#else
+    // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
+    proc.is_musl = process_check_module(&proc, "ld-musl-", 1) == 0;
+    // In musl, dlclose doesn't do anything - see https://wiki.musl-libc.org/functional-differences-from-glibc.html
+    can_uninject = proc.is_musl ? 0 : 1;
+#endif
 
     for (loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
         const char *errmsg;
@@ -302,13 +326,13 @@ int main(int argc, char **argv)
             printf("injected. (handle=%p)\n", handle);
             fflush(stdout);
 
-            if (injector_inject(injector, "Makefile", &handle) == 0) {
+            if (injector_inject(injector, "no such library", &handle) == 0) {
                 printf("injection should fail but succeeded:\n");
                 goto cleanup;
             }
             errmsg = injector_error();
             if (strncmp(errmsg, INJECT_ERRMSG, strlen(INJECT_ERRMSG)) != 0) {
-                printf("unexpected injection error message: %s\n", errmsg);
+                printf("unexpected injection error message: %s\nexpected: %s\n", errmsg, INJECT_ERRMSG);
                 goto cleanup;
             }
         } else {
@@ -326,7 +350,7 @@ int main(int argc, char **argv)
             }
             errmsg = injector_error();
             if (strcmp(errmsg, UNINJECT_ERRMSG) != 0) {
-                printf("unexpected uninjection error message: %s\n", errmsg);
+                printf("unexpected uninjection error message: %s\nexpected: %s\n", errmsg, UNINJECT_ERRMSG);
                 goto cleanup;
             }
 #endif
@@ -339,7 +363,7 @@ int main(int argc, char **argv)
         printf("detached.\n");
         fflush(stdout);
 
-        if (process_check_module(&proc, test_library) != loop_cnt) {
+        if (can_uninject && process_check_module(&proc, test_library, 0) != loop_cnt) {
             if (loop_cnt == 0) {
                 printf("%s wasn't found after injection\n", test_library);
             } else {

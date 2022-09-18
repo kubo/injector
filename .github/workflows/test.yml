@@ -46,3 +46,18 @@ jobs:
       shell: cmd
       run: |
         cd tests && .\test-prog-x64.exe
+
+  tests_on_alpine_x86_64:
+    name: Tests on Alpine (x86_64 only)
+    runs-on: ubuntu-latest
+    container: alpine
+    steps:
+    - name: Install packages
+      run: |
+        apk add gcc musl-dev git make
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: run tests
+      run: |
+        make check

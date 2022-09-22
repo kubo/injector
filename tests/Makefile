@@ -24,6 +24,38 @@ ifneq ($(wildcard /usr/bin/arm-linux-gnueabi-gcc),)
   BUILD_TARGETS += armel
 endif
 
+ifneq ($(wildcard /usr/bin/mips-linux-gnu-gcc),)
+  BUILD_TARGETS += mips
+endif
+
+ifneq ($(wildcard /usr/bin/mipsel-linux-gnu-gcc),)
+  BUILD_TARGETS += mipsel
+endif
+
+ifneq ($(wildcard /usr/bin/mips64-linux-gnuabi64-gcc),)
+  BUILD_TARGETS += mips64
+endif
+
+ifneq ($(wildcard /usr/bin/mips64el-linux-gnuabi64-gcc),)
+  BUILD_TARGETS += mips64el
+endif
+
+ifneq ($(wildcard /usr/bin/mipsisa32r6-linux-gnu-gcc),)
+  BUILD_TARGETS += mipsisa32r6
+endif
+
+ifneq ($(wildcard /usr/bin/mipsisa32r6el-linux-gnu-gcc),)
+  BUILD_TARGETS += mipsisa32r6el
+endif
+
+ifneq ($(wildcard /usr/bin/mipsisa64r6-linux-gnuabi64-gcc),)
+  BUILD_TARGETS += mipsisa64r6
+endif
+
+ifneq ($(wildcard /usr/bin/mipsisa64r6el-linux-gnuabi64-gcc),)
+  BUILD_TARGETS += mipsisa64r6el
+endif
+
 ifeq ($(BUILD_TARGETS),)
   BUILD_TARGETS = default
 endif
@@ -74,6 +106,42 @@ armhf:
 armel:
 	@echo "=============== build: armel ==============="; \
 	CC=arm-linux-gnueabi-gcc SUFFIX=-armel $(MAKE) build
+
+mips:
+	@echo "=============== build: mips ==============="; \
+	CC='mips-linux-gnu-gcc -mabi=32' SUFFIX=-mips32 $(MAKE) build
+	CC='mips-linux-gnu-gcc -mabi=n32' SUFFIX=-mipsn32 $(MAKE) build
+
+mipsel:
+	@echo "=============== build: mipsel ==============="; \
+	CC='mipsel-linux-gnu-gcc -mabi=32' SUFFIX=-mips32el $(MAKE) build
+	CC='mipsel-linux-gnu-gcc -mabi=n32' SUFFIX=-mipsn32el $(MAKE) build
+
+mips64:
+	@echo "=============== build: mips64 ==============="; \
+	CC=mips64-linux-gnuabi64-gcc SUFFIX=-mips64 $(MAKE) build
+
+mips64el:
+	@echo "=============== build: mips64el ==============="; \
+	CC=mips64el-linux-gnuabi64-gcc SUFFIX=-mips64el $(MAKE) build
+
+mipsisa32r6:
+	@echo "=============== build: mipsisa32r6 ==============="; \
+	CC='mipsisa32r6-linux-gnu-gcc -mabi=32' SUFFIX=-mipsisa32r6 $(MAKE) build
+	CC='mipsisa32r6-linux-gnu-gcc -mabi=n32' SUFFIX=-mipsisan32r6 $(MAKE) build
+
+mipsisa32r6el:
+	@echo "=============== build: mipsisa32r6el ==============="; \
+	CC='mipsisa32r6el-linux-gnu-gcc -mabi=32' SUFFIX=-mipsisa32r6el $(MAKE) build
+	CC='mipsisa32r6el-linux-gnu-gcc -mabi=n32' SUFFIX=-mipsisan32r6el $(MAKE) build
+
+mipsisa64r6:
+	@echo "=============== build: mipsisa64r6 ==============="; \
+	CC=mipsisa64r6-linux-gnuabi64-gcc SUFFIX=-mipsisa64r6 $(MAKE) build
+
+mipsisa64r6el:
+	@echo "=============== build: mipsisa64r6el ==============="; \
+	CC=mipsisa64r6el-linux-gnuabi64-gcc SUFFIX=-mipsisa64r6el $(MAKE) build
 
 build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).so
 

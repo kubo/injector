@@ -135,12 +135,18 @@ injector process \ target process | arm64 | armhf | armel
 **armhf** | failure(*2) | success | success
 **armel** | failure(*2) | success | success
 
+injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
+---|---|---|---
+**mips64el** | success (*6)    | success (*6) | success (*6) 
+**mipsel (n32)** | failure(*2) | success (*6) | success (*6) 
+**mipsel (o32)** | failure(*2) | success (*6) | success (*6) 
+
 *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
 *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 *3: failure with `x32-ABI target process is supported only by x86_64`.  
 *4: tested on github actions with glibc.  
 *5: tested on github actions with both glibc and musl.  
-
+*6: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
 
 ## Windows
 

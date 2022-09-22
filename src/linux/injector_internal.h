@@ -43,6 +43,11 @@
 #define user_regs_struct user_regs
 #endif
 
+#ifdef __mips__
+#include <asm/ptrace.h>
+#define user_regs_struct pt_regs
+#endif
+
 #define PTRACE_OR_RETURN(request, injector, addr, data) do { \
     int rv = injector__ptrace(request, injector->pid, addr, data, #request); \
     if (rv != 0) { \
@@ -64,12 +69,21 @@ typedef enum {
     ARCH_ARM64,
     ARCH_ARM_EABI_THUMB,
     ARCH_ARM_EABI,
+    ARCH_MIPS_64,
+    ARCH_MIPS_N32,
+    ARCH_MIPS_O32,
 } arch_t;
 
 typedef union {
-    uint8_t u8[8];
+#if defined(__x86_64__) || defined(__i386__)
+    uint8_t u8[sizeof(long)];
+#elif defined(__aarch64__) || defined(__arm__)
     uint16_t u16[4];
     uint32_t u32[2];
+#elif defined(__mips__)
+    uint32_t u32[4];
+#endif
+    long dummy;
 } code_t;
 
 struct injector {

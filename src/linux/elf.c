@@ -197,6 +197,27 @@ int injector__collect_libc_information(injector_t *injector)
         injector->sys_mprotect = 125;
         injector->sys_munmap = 91;
         break;
+    case EM_MIPS:
+        if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
+            /* MIPS 64 */
+            injector->arch = ARCH_MIPS_64;
+            injector->sys_mmap = 5000 + 9;
+            injector->sys_mprotect = 5000 + 10;
+            injector->sys_munmap = 5000 + 11;
+        } else if (ehdr.e_flags & EF_MIPS_ABI2) {
+            /* MIPS N32 */
+            injector->arch = ARCH_MIPS_N32;
+            injector->sys_mmap = 6000 + 9;
+            injector->sys_mprotect = 6000 + 10;
+            injector->sys_munmap = 6000 + 11;
+        } else {
+            /* MIPS O32 */
+            injector->arch = ARCH_MIPS_O32;
+            injector->sys_mmap = 4000 + 90;
+            injector->sys_mprotect = 4000 + 125;
+            injector->sys_munmap = 4000 + 91;
+        }
+        break;
     default:
         injector__set_errmsg("Unknown target process architecture: 0x%04x", ehdr.e_machine);
         rv = INJERR_UNSUPPORTED_TARGET;

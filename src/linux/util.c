@@ -63,6 +63,12 @@ const char *injector__arch2name(arch_t arch)
         return "ARM EABI thumb";
     case ARCH_ARM_EABI:
         return "ARM EABI";
+    case ARCH_MIPS_64:
+        return "MIPS 64";
+    case ARCH_MIPS_N32:
+        return "MIPS N32 ABI";
+    case ARCH_MIPS_O32:
+        return "MIPS O32 ABI";
     }
     return "?";
 }

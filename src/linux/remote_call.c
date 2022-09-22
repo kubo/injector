@@ -24,7 +24,19 @@
  */
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <stdio.h>
+#include <inttypes.h>
 #include "injector_internal.h"
+
+// #define INJECTOR_DEBUG_REMOTE_CALL 1
+
+#ifdef INJECTOR_DEBUG_REMOTE_CALL
+#undef DEBUG
+#define DEBUG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#undef DEBUG
+#define DEBUG(...) do {} while(0)
+#endif
 
 #ifdef __x86_64__
 #define eip rip
@@ -49,8 +61,52 @@
 #define BREAKINST_ARM 0xe7f001f0 /* in linux-source-tree/arch/arm/kernel/ptrace.c */
 #define BREAKINST_ARM64 0xd4200000 /* asm("brk #0") */
 
+#ifdef __mips__
+#define REG_V0 2
+#define REG_A0 4
+#define REG_A1 5
+#define REG_A2 6
+#define REG_A3 7
+#define REG_A4 8
+#define REG_A5 9
+#define REG_T4 12
+#define REG_T9 25
+#define REG_SP 29
+#define REG_FP 30
+#define REG_RA 31
+
+static void print_regs(const injector_t *injector, const struct pt_regs *regs)
+{
+    DEBUG("  Registers:\n");
+    DEBUG("    -- at v0 v1: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[0], regs->regs[1], regs->regs[2], regs->regs[3]);
+    DEBUG("    a0 a1 a2 a3: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[4], regs->regs[5], regs->regs[6], regs->regs[7]);
+    DEBUG("    %s: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          (injector->arch != ARCH_MIPS_O32) ? "a4 a5 a6 a7" : "t0 t1 t2 t3",
+          regs->regs[8], regs->regs[9], regs->regs[10], regs->regs[11]);
+    DEBUG("    t4 t5 t6 t7: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[12], regs->regs[13], regs->regs[14], regs->regs[15]);
+    DEBUG("    s0 s1 s2 s3: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[16], regs->regs[17], regs->regs[18], regs->regs[19]);
+    DEBUG("    s4 s5 s6 s7: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[20], regs->regs[21], regs->regs[22], regs->regs[23]);
+    DEBUG("    t8 t9 k0 k1: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[24], regs->regs[25], regs->regs[26], regs->regs[27]);
+    DEBUG("    gp sp s8 ra: %016"PRIx64" %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->regs[28], regs->regs[29], regs->regs[30], regs->regs[31]);
+    DEBUG("    lo hi epc:                    %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->lo, regs->hi, regs->cp0_epc);
+    DEBUG("    badvaddr status cause:        %016"PRIx64" %016"PRIx64" %016"PRIx64"\n",
+          regs->cp0_badvaddr, regs->cp0_status, regs->cp0_cause);
+}
+#define PRINT_REGS(injector, regs) print_regs((injector), (regs))
+#endif /* __mips__ */
+
 /* register type used in struct user_regs_struct */
-#if defined(__LP64__) || defined(__x86_64__)
+#if defined(__mips__)
+typedef uint64_t user_reg_t;
+#elif defined(__LP64__)
 typedef unsigned long long user_reg_t;
 #elif defined(__i386__)
 typedef long user_reg_t;
@@ -59,6 +115,10 @@ typedef unsigned long user_reg_t;
 #endif
 
 static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_struct *regs, code_t *code, size_t code_size);
+
+#ifndef PRINT_REGS
+#define PRINT_REGS(injector, regs) do {} while (0)
+#endif
 
 /*
  * Call the specified system call in the target process.
@@ -74,10 +134,12 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
     int rv;
+#if !defined(__mips__)
     user_reg_t *reg_return = NULL;
 #if defined(__aarch64__)
     uint32_t *reg32_return = NULL;
     uint32_t *uregs = (uint32_t *)&regs;
+#endif
 #endif
 
     va_start(ap, syscall_number);
@@ -88,6 +150,9 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     arg5 = va_arg(ap, long);
     arg6 = va_arg(ap, long);
     va_end(ap);
+
+    DEBUG("injector__call_syscall:\n");
+    DEBUG("  args: %ld, %lx, %lx, %lx, %lx, %lx, %lx\n", syscall_number, arg1, arg2, arg3, arg4, arg5, arg6);
 
 #if !(defined(__x86_64__) && defined(__LP64__))
     if (injector->arch == ARCH_X86_64_X32) {
@@ -196,17 +261,64 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         reg32_return = &uregs[0];
         break;
 #endif
+#if defined(__mips__)
+    case ARCH_MIPS_64:
+    case ARCH_MIPS_N32:
+    case ARCH_MIPS_O32:
+        /* setup instructions */
+        if (syscall_number > 0xffff) {
+            injector__set_errmsg("too large system call number: %d", syscall_number);
+            return INJERR_OTHER;
+        }
+        code.u32[0] = 0x00000025 | (REG_A3 << 11) | (REG_T4 << 21); /* or $a3, $t4, $zero; move $a3, $t4 */
+        code.u32[1] = 0x24000000 | (REG_V0 << 16) | syscall_number; /* addiu $v0, $zero, syscall_number */
+        code.u32[2] = 0x0000000c; /* syscall */
+        code.u32[3] = 0x0000000d; /* break */
+        code_size = 4 * 4;
+        DEBUG("  Code: %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32"\n",
+              code.u32[0], code.u32[1], code.u32[2], code.u32[3]);
+        /* setup registers */
+        regs.cp0_epc  = injector->code_addr;
+        regs.regs[REG_A0] = arg1;
+        regs.regs[REG_A1] = arg2;
+        regs.regs[REG_A2] = arg3;
+        // Use the combination of "regs.regs[REG_T4] = arg4" and "move $a3, $t4"
+        // instead of "regs.regs[REG_A3] = arg4". I don't know why the latter
+        // doesn't work.
+        regs.regs[REG_T4] = arg4;
+        if (injector->arch != ARCH_MIPS_O32) {
+            /* ARCH_MIPS_64 or ARCH_MIPS_N32 */
+            regs.regs[REG_A4] = arg5;
+            regs.regs[REG_A5] = arg6;
+        } else {
+            /* ARCH_MIPS_O32 */
+            regs.regs[REG_SP] -= 32;
+            PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 16, arg5);
+            PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 20, arg6);
+        }
+        break;
+#endif
     default:
         injector__set_errmsg("Unexpected architecture: %s", injector__arch2name(injector->arch));
         return INJERR_UNSUPPORTED_TARGET;
     }
 
+    PRINT_REGS(injector, &regs);
     rv = kick_then_wait_sigtrap(injector, &regs, &code, code_size);
     if (rv != 0) {
         return rv;
     }
+    PRINT_REGS(injector, &regs);
 
     if (retval != NULL) {
+#if defined(__mips__)
+        if (regs.regs[REG_A3] == 0) {
+            *retval = (long)regs.regs[REG_V0];
+        } else {
+            errno = (int)regs.regs[REG_V0];
+            *retval = -1;
+        }
+#else /* defined(__mips__) */
 #if defined(__aarch64__)
         if (reg32_return != NULL) {
             if (*reg32_return <= -4096u) {
@@ -226,6 +338,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #if defined(__aarch64__)
         }
 #endif
+#endif /* defined(__mips__) */
     }
     return 0;
 }
@@ -258,6 +371,9 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     arg5 = va_arg(ap, long);
     arg6 = va_arg(ap, long);
     va_end(ap);
+
+    DEBUG("injector__call_function:\n");
+    DEBUG("  args: %lx, %lx, %lx, %lx, %lx, %lx, %lx\n", function_addr, arg1, arg2, arg3, arg4, arg5, arg6);
 
     switch (injector->arch) {
 #if defined(__x86_64__) && defined(__LP64__)
@@ -368,15 +484,50 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
         reg32_return = &uregs[0];
         break;
 #endif
+#if defined(__mips__)
+    case ARCH_MIPS_64:
+    case ARCH_MIPS_N32:
+    case ARCH_MIPS_O32:
+        /* setup instructions */
+        code.u32[0] = 0x00000009 | (REG_RA << 11) | (REG_T9 << 21); /* jalr $t9;  */
+        code.u32[1] = 0x00000025 | (REG_A3 << 11) | (REG_T4 << 21); /* or $a3, $t4, $zero; in a delay slot */
+        code.u32[2] = 0x0000000d; /* break */
+        code.u32[3] = 0x00000000; /* nop */
+        code_size = 4 * 4;
+        DEBUG("  Code: %08"PRIx32" %08"PRIx32" %08"PRIx32" %08"PRIx32"\n",
+              code.u32[0], code.u32[1], code.u32[2], code.u32[3]);
+        /* setup registers */
+        regs.cp0_epc  = injector->code_addr;
+        regs.regs[REG_FP] = injector->stack + injector->stack_size - 32;
+        regs.regs[REG_SP] = injector->stack + injector->stack_size - 64;
+        regs.regs[REG_T9] = function_addr;
+        regs.regs[REG_A0] = arg1;
+        regs.regs[REG_A1] = arg2;
+        regs.regs[REG_A2] = arg3;
+        regs.regs[REG_T4] = arg4;
+        if (injector->arch != ARCH_MIPS_O32) {
+            /* ARCH_MIPS_64 or ARCH_MIPS_N32 */
+            regs.regs[REG_A4] = arg5;
+            regs.regs[REG_A5] = arg6;
+        } else {
+            /* ARCH_MIPS_O32 */
+            PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 16, arg5);
+            PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 20, arg6);
+        }
+        reg_return = &regs.regs[REG_V0];
+        break;
+#endif
     default:
         injector__set_errmsg("Unexpected architecture: %s", injector__arch2name(injector->arch));
         return -1;
     }
 
+    PRINT_REGS(injector, &regs);
     rv = kick_then_wait_sigtrap(injector, &regs, &code, code_size);
     if (rv != 0) {
         return rv;
     }
+    PRINT_REGS(injector, &regs);
 
     if (retval != NULL) {
 #if defined(__aarch64__)

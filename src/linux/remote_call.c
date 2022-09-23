@@ -22,6 +22,15 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#if defined __linux__
+/* Detect musl libc. See https://stackoverflow.com/a/70211227/985524  */
+#define _GNU_SOURCE
+#include <features.h>
+#ifndef __USE_GNU
+#define MUSL_LIBC
+#endif // __USE_GNU
+#endif // __linux__
+
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdio.h>
@@ -106,7 +115,7 @@ static void print_regs(const injector_t *injector, const struct pt_regs *regs)
 /* register type used in struct user_regs_struct */
 #if defined(__mips__)
 typedef uint64_t user_reg_t;
-#elif defined(__LP64__)
+#elif defined(__LP64__) && !defined(MUSL_LIBC)
 typedef unsigned long long user_reg_t;
 #elif defined(__i386__)
 typedef long user_reg_t;

@@ -112,9 +112,16 @@ static void print_regs(const injector_t *injector, const struct pt_regs *regs)
 #define PRINT_REGS(injector, regs) print_regs((injector), (regs))
 #endif /* __mips__ */
 
+#ifdef __riscv
+#define REG_RA 1
+#define REG_T1 6
+#endif
+
 /* register type used in struct user_regs_struct */
 #if defined(__mips__)
 typedef uint64_t user_reg_t;
+#elif defined(__riscv)
+typedef unsigned long user_reg_t;
 #elif defined(__LP64__) && !defined(MUSL_LIBC)
 typedef unsigned long long user_reg_t;
 #elif defined(__i386__)
@@ -305,6 +312,29 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
             PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 16, arg5);
             PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 20, arg6);
         }
+        break;
+#endif
+#if defined(__riscv)
+#ifdef __LP64__
+    case ARCH_RISCV_64:
+#else
+    case ARCH_RISCV_32:
+#endif
+        /* setup instructions */
+        code.u32[0] = 0x00000073; /* ecall */
+        code.u32[1] = 0x00100073; /* ebreak */
+        code_size = 2 * 4;
+        DEBUG("  Code: %08"PRIx32" %08"PRIx32"\n",
+              code.u32[0], code.u32[1]);
+        /* setup registers */
+        regs.pc  = injector->code_addr;
+        regs.a0 = arg1;
+        regs.a1 = arg2;
+        regs.a2 = arg3;
+        regs.a3 = arg4;
+        regs.a4 = arg5;
+        regs.a5 = arg6;
+        reg_return = &regs.a0;
         break;
 #endif
     default:
@@ -524,6 +554,31 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
             PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 20, arg6);
         }
         reg_return = &regs.regs[REG_V0];
+        break;
+#endif
+#if defined(__riscv)
+#ifdef __LP64__
+    case ARCH_RISCV_64:
+#else
+    case ARCH_RISCV_32:
+#endif
+        /* setup instructions */
+        code.u32[0] = 0x00000067 | (REG_RA << 7) | (REG_T1 << 15) ; /* jalr t1 */
+        code.u32[1] = 0x00100073; /* ebreak */
+        code_size = 2 * 4;
+        DEBUG("  Code: %08"PRIx32" %08"PRIx32"\n",
+              code.u32[0], code.u32[1]);
+        /* setup registers */
+        regs.pc = injector->code_addr;
+        regs.sp = injector->stack + injector->stack_size - 16;
+        regs.t1 = function_addr;
+        regs.a0 = arg1;
+        regs.a1 = arg2;
+        regs.a2 = arg3;
+        regs.a3 = arg4;
+        regs.a4 = arg5;
+        regs.a5 = arg6;
+        reg_return = &regs.a0;
         break;
 #endif
     default:

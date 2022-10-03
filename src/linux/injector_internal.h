@@ -48,6 +48,10 @@
 #define user_regs_struct pt_regs
 #endif
 
+#ifdef __riscv
+#include <asm/ptrace.h>
+#endif
+
 #define PTRACE_OR_RETURN(request, injector, addr, data) do { \
     int rv = injector__ptrace(request, injector->pid, addr, data, #request); \
     if (rv != 0) { \
@@ -72,6 +76,8 @@ typedef enum {
     ARCH_MIPS_64,
     ARCH_MIPS_N32,
     ARCH_MIPS_O32,
+    ARCH_RISCV_64,
+    ARCH_RISCV_32,
 } arch_t;
 
 typedef union {
@@ -82,6 +88,8 @@ typedef union {
     uint32_t u32[2];
 #elif defined(__mips__)
     uint32_t u32[4];
+#elif defined(__riscv)
+    uint32_t u32[2];
 #endif
     long dummy;
 } code_t;

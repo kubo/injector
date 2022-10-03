@@ -218,6 +218,18 @@ int injector__collect_libc_information(injector_t *injector)
             injector->sys_munmap = 4000 + 91;
         }
         break;
+#ifdef EM_RISCV
+    case EM_RISCV:
+        if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {
+            injector->arch = ARCH_RISCV_64;
+        } else {
+            injector->arch = ARCH_RISCV_32;
+        }
+        injector->sys_mmap = 222;
+        injector->sys_mprotect = 226;
+        injector->sys_munmap = 215;
+        break;
+#endif
     default:
         injector__set_errmsg("Unknown target process architecture: 0x%04x", ehdr.e_machine);
         rv = INJERR_UNSUPPORTED_TARGET;

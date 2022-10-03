@@ -56,6 +56,10 @@ ifneq ($(wildcard /usr/bin/mipsisa64r6el-linux-gnuabi64-gcc),)
   BUILD_TARGETS += mipsisa64r6el
 endif
 
+ifneq ($(wildcard /usr/bin/riscv64-linux-gnu-gcc),)
+  BUILD_TARGETS += riscv64
+endif
+
 ifeq ($(BUILD_TARGETS),)
   BUILD_TARGETS = default
 endif
@@ -142,6 +146,10 @@ mipsisa64r6:
 mipsisa64r6el:
 	@echo "=============== build: mipsisa64r6el ==============="; \
 	CC=mipsisa64r6el-linux-gnuabi64-gcc SUFFIX=-mipsisa64r6el $(MAKE) build
+
+riscv64:
+	@echo "=============== build: riscv64 ==============="; \
+	CC=riscv64-linux-gnu-gcc SUFFIX=-riscv64 $(MAKE) build
 
 build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).so
 

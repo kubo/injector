@@ -69,6 +69,10 @@ const char *injector__arch2name(arch_t arch)
         return "MIPS N32 ABI";
     case ARCH_MIPS_O32:
         return "MIPS O32 ABI";
+    case ARCH_RISCV_64:
+        return "RISC-V 64";
+    case ARCH_RISCV_32:
+        return "RISC-V 32";
     }
     return "?";
 }

@@ -637,6 +637,9 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
             goto cleanup;
         }
         if (WIFSTOPPED(status)) {
+#if defined(PT_GETSIGINFO)
+            siginfo_t si = {0,};
+#endif
             switch (WSTOPSIG(status)) {
             case SIGTRAP:
                 goto got_sigtrap;
@@ -646,6 +649,17 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
                     goto cleanup;
                 }
                 break;
+#if defined(PT_GETSIGINFO)
+            case SIGSYS:
+              PTRACE_OR_RETURN(PT_GETSIGINFO, injector, 0, (long)&si);
+              if (si.si_signo == SIGSYS && si.si_code == 1) {
+                  injector__set_errmsg("Got SIGSYS. System call %d at address %p might be blocked by seccomp.",
+                                       si.si_syscall, (void*)si.si_call_addr);
+                  rv = INJERR_OTHER;
+                  goto cleanup;
+              }
+              // FALL THROUGH */
+#endif
             default:
                 injector__set_errmsg("The target process unexpectedly stopped by signal %d.", WSTOPSIG(status));
                 rv = INJERR_OTHER;

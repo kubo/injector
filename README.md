@@ -155,6 +155,10 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
   *1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
   *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 
+* RISC-V
+
+  * **riscv64** (tested on [Ubuntu 22.04.1 riscv64 on QEMU](https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU))
+
 ## Windows
 
 injector process \ target process | x64 | x86 | arm64

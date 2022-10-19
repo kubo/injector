@@ -24,7 +24,7 @@
  */
 #include "injector_internal.h"
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__riscv)
 #define USE_REGSET
 #include <elf.h> /* for NT_PRSTATUS */
 #include <sys/uio.h> /* for struct iovec */

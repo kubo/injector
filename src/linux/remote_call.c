@@ -115,6 +115,32 @@ static void print_regs(const injector_t *injector, const struct pt_regs *regs)
 #ifdef __riscv
 #define REG_RA 1
 #define REG_T1 6
+#ifdef __LP64__
+#define WIDTH "016"
+#else
+#define WIDTH "08"
+#endif
+static void print_regs(const injector_t *injector, const struct user_regs_struct *regs)
+{
+    DEBUG("  Registers:\n");
+    DEBUG("    pc  ra  sp  gp  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->pc, regs->ra, regs->sp, regs->gp);
+    DEBUG("    tp  t0  t1  t2  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->tp, regs->t0, regs->t1, regs->t2);
+    DEBUG("    s0  s1  a0  a1  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->s0, regs->s1, regs->a0, regs->a1);
+    DEBUG("    a2  a3  a4  a5  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->a2, regs->a3, regs->a4, regs->a5);
+    DEBUG("    a6  a7  s2  s3  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->a6, regs->a7, regs->s2, regs->s3);
+    DEBUG("    s4  s5  s6  s7  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->s4, regs->s5, regs->s6, regs->s7);
+    DEBUG("    s8  s9  s10 s11 : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->s8, regs->s9, regs->s10, regs->s11);
+    DEBUG("    t3  t4  t5  t6  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->t3, regs->t4, regs->t5, regs->t6);
+}
+#define PRINT_REGS(injector, regs) print_regs((injector), (regs))
 #endif
 
 /* register type used in struct user_regs_struct */
@@ -317,9 +343,8 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
 #if defined(__riscv)
 #ifdef __LP64__
     case ARCH_RISCV_64:
-#else
-    case ARCH_RISCV_32:
 #endif
+    case ARCH_RISCV_32:
         /* setup instructions */
         code.u32[0] = 0x00000073; /* ecall */
         code.u32[1] = 0x00100073; /* ebreak */
@@ -334,6 +359,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         regs.a3 = arg4;
         regs.a4 = arg5;
         regs.a5 = arg6;
+        regs.a7 = syscall_number;
         reg_return = &regs.a0;
         break;
 #endif
@@ -559,9 +585,8 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
 #if defined(__riscv)
 #ifdef __LP64__
     case ARCH_RISCV_64:
-#else
-    case ARCH_RISCV_32:
 #endif
+    case ARCH_RISCV_32:
         /* setup instructions */
         code.u32[0] = 0x00000067 | (REG_RA << 7) | (REG_T1 << 15) ; /* jalr t1 */
         code.u32[1] = 0x00100073; /* ebreak */

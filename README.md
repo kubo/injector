@@ -155,6 +155,11 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
   *1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
   *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 
+* PowerPC
+
+  * **ppc64le** (tested on [alpine 3.16.2 ppc64le](https://dl-cdn.alpinelinux.org/alpine/v3.16/releases/ppc64le/) on [QEMU](https://www.qemu.org/))
+  * **powerpc (big endian)** (tested on [ubuntu 16.04 powerpc](https://old-releases.ubuntu.com/releases/xenial/) on [QEMU](https://www.qemu.org/)
+
 * RISC-V
 
   * **riscv64** (tested on [Ubuntu 22.04.1 riscv64 on QEMU](https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU))

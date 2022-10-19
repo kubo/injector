@@ -218,6 +218,18 @@ int injector__collect_libc_information(injector_t *injector)
             injector->sys_munmap = 4000 + 91;
         }
         break;
+    case EM_PPC64:
+        injector->arch = ARCH_POWERPC_64;
+        injector->sys_mmap = 90;
+        injector->sys_mprotect = 125;
+        injector->sys_munmap = 91;
+        break;
+    case EM_PPC:
+        injector->arch = ARCH_POWERPC;
+        injector->sys_mmap = 90;
+        injector->sys_mprotect = 125;
+        injector->sys_munmap = 91;
+        break;
 #ifdef EM_RISCV
     case EM_RISCV:
         if (ehdr.e_ident[EI_CLASS] == ELFCLASS64) {

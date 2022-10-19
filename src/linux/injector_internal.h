@@ -48,6 +48,11 @@
 #define user_regs_struct pt_regs
 #endif
 
+#ifdef __powerpc__
+#include <asm/ptrace.h>
+#define user_regs_struct pt_regs
+#endif
+
 #ifdef __riscv
 #include <asm/ptrace.h>
 #endif
@@ -76,6 +81,8 @@ typedef enum {
     ARCH_MIPS_64,
     ARCH_MIPS_N32,
     ARCH_MIPS_O32,
+    ARCH_POWERPC_64,
+    ARCH_POWERPC,
     ARCH_RISCV_64,
     ARCH_RISCV_32,
 } arch_t;
@@ -88,6 +95,8 @@ typedef union {
     uint32_t u32[2];
 #elif defined(__mips__)
     uint32_t u32[4];
+#elif defined(__powerpc__)
+    uint32_t u32[2];
 #elif defined(__riscv)
     uint32_t u32[2];
 #endif

@@ -112,6 +112,48 @@ static void print_regs(const injector_t *injector, const struct pt_regs *regs)
 #define PRINT_REGS(injector, regs) print_regs((injector), (regs))
 #endif /* __mips__ */
 
+
+#ifdef __powerpc__
+static void print_regs(const injector_t *injector, const struct pt_regs *regs)
+{
+#undef WIDTH
+#ifdef __LP64__
+#define WIDTH "016"
+#define softe_or_mq_str "softe"
+#define softe_or_mq softe
+#else
+#define WIDTH "08"
+#define softe_or_mq_str "mq   "
+#define softe_or_mq mq
+#endif
+    DEBUG("  Registers:\n");
+    DEBUG("    gpr0  gpr1  gpr2   gpr3   : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[0], regs->gpr[1], regs->gpr[2], regs->gpr[3]);
+    DEBUG("    gpr4  gpr5  gpr6   gpr7   : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[4], regs->gpr[5], regs->gpr[6], regs->gpr[7]);
+    DEBUG("    gpr8  gpr9  gpr10  gpr11  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[8], regs->gpr[9], regs->gpr[10], regs->gpr[11]);
+    DEBUG("    gpr12 gpr13 gpr14  gpr15  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[12], regs->gpr[13], regs->gpr[14], regs->gpr[15]);
+    DEBUG("    gpr16 gpr17 gpr18  gpr19  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[16], regs->gpr[17], regs->gpr[18], regs->gpr[19]);
+    DEBUG("    gpr20 gpr21 gpr22  gpr23  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[20], regs->gpr[21], regs->gpr[22], regs->gpr[23]);
+    DEBUG("    gpr24 gpr25 gpr26  gpr27  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[24], regs->gpr[25], regs->gpr[26], regs->gpr[27]);
+    DEBUG("    gpr28 gpr29 gpr30  gpr31  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->gpr[28], regs->gpr[29], regs->gpr[30], regs->gpr[31]);
+    DEBUG("    nip   msr   orig_gpr3 ctr : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->nip, regs->msr, regs->orig_gpr3, regs->ctr);
+    DEBUG("    link  xer   ccr    "softe_or_mq_str"  : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->link, regs->xer, regs->ccr, regs->softe_or_mq);
+    DEBUG("    trap  dar   dsisr  result : %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx %"WIDTH"lx\n",
+          regs->trap, regs->dar, regs->dsisr, regs->result);
+#undef WIDTH
+}
+#define PRINT_REGS(injector, regs) print_regs((injector), (regs))
+#endif
+
 #ifdef __riscv
 #define REG_RA 1
 #define REG_T1 6
@@ -176,7 +218,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     long arg1, arg2, arg3, arg4, arg5, arg6;
     va_list ap;
     int rv;
-#if !defined(__mips__)
+#if !defined(__mips__) && !defined(__powerpc__)
     user_reg_t *reg_return = NULL;
 #if defined(__aarch64__)
     uint32_t *reg32_return = NULL;
@@ -340,6 +382,26 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         }
         break;
 #endif
+#if defined(__powerpc__)
+#ifdef __LP64__
+    case ARCH_POWERPC_64:
+#endif
+    case ARCH_POWERPC:
+        /* setup instructions */
+        code.u32[0] = 0x44000002; /* sc */
+        code.u32[1] = 0x7fe00008; /* trap */
+        code_size = 2 * 4;
+        /* setup registers */
+        regs.nip = injector->code_addr;
+        regs.gpr[PT_R0] = syscall_number;
+        regs.gpr[PT_R3] = arg1;
+        regs.gpr[PT_R4] = arg2;
+        regs.gpr[PT_R5] = arg3;
+        regs.gpr[PT_R6] = arg4;
+        regs.gpr[PT_R7] = arg5;
+        regs.gpr[PT_R8] = arg6;
+        break;
+#endif
 #if defined(__riscv)
 #ifdef __LP64__
     case ARCH_RISCV_64:
@@ -383,7 +445,15 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
             errno = (int)regs.regs[REG_V0];
             *retval = -1;
         }
-#else /* defined(__mips__) */
+#elif defined(__powerpc__)
+        /* https://github.com/strace/strace/blob/v5.19/src/linux/powerpc/get_error.c#L21-L26 */
+        if (regs.ccr & 0x10000000) {
+            errno = (int)regs.gpr[PT_R3];
+            *retval = -1;
+        } else {
+            *retval = (long)regs.gpr[PT_R3];
+        }
+#else
 #if defined(__aarch64__)
         if (reg32_return != NULL) {
             if (*reg32_return <= -4096u) {
@@ -580,6 +650,29 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
             PTRACE_OR_RETURN(PTRACE_POKETEXT, injector, regs.regs[REG_SP] + 20, arg6);
         }
         reg_return = &regs.regs[REG_V0];
+        break;
+#endif
+#if defined(__powerpc__)
+#ifdef __LP64__
+    case ARCH_POWERPC_64:
+#endif
+    case ARCH_POWERPC:
+        /* setup instructions */
+        code.u32[0] = 0x4e800421; /* bctrl */
+        code.u32[1] = 0x7fe00008; /* trap */
+        code_size = 2 * 4;
+        /* setup registers */
+        regs.nip = injector->code_addr;
+        regs.gpr[PT_R1] = injector->stack + injector->stack_size - 256;
+        regs.ctr = function_addr;
+        regs.gpr[PT_R3] = arg1;
+        regs.gpr[PT_R4] = arg2;
+        regs.gpr[PT_R5] = arg3;
+        regs.gpr[PT_R6] = arg4;
+        regs.gpr[PT_R7] = arg5;
+        regs.gpr[PT_R8] = arg6;
+        regs.gpr[PT_R12] = function_addr;
+        reg_return = &regs.gpr[PT_R3];
         break;
 #endif
 #if defined(__riscv)

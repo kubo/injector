@@ -13,16 +13,13 @@ However the way to call `__libc_dlopen_mode` in `libc.so.6` is
 thoroughly different.
 
 * `linux-inject` writes about 80 bytes of code to the target process
-  on x86_64. This writes only four or eight bytes.
+  on x86_64. This writes only 4 ~ 16 bytes.
 * `linux-inject` writes code at the firstly found executable region
   of memory, which may be referred by other threads. This writes it
   at [the entry point of `libc.so.6`][libc_main], which will be referred by
   nobody unless the libc itself is executed as a program.
 
-[libc_main]: https://github.com/lattera/glibc/blob/master/csu/version.c#L68-L77
-
-This was tested only on Ubuntu 16.04 x86_64 and Debian 8 arm64. It may not work on other
-distributions.
+[libc_main]: https://sourceware.org/git/?p=glibc.git;a=blob;f=csu/version.c;h=8c0ed79c01223e1f12b54d19f90b5e5b7dd78d27;hb=c804cd1c00adde061ca51711f63068c103e94eef#l67
 
 ## Windows
 
@@ -123,30 +120,40 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
 ## Linux
 
-injector process \ target process | x86_64 | i386 | x32(*1)
----|---|---|---
-**x86_64** | success(*5) | success(*4) | success(*4)
-**i386**   | failure(*2) | success(*4) | failure(*3)
-**x32**(*1) | failure(*2) | success(*4) | failure(*3)
+* x86
 
-injector process \ target process | arm64 | armhf | armel
----|---|---|---
-**arm64** | success     | success | success
-**armhf** | failure(*2) | success | success
-**armel** | failure(*2) | success | success
+  injector process \ target process | x86_64 | i386 | x32(*1)
+  ---|---|---|---
+  **x86_64** | success(*2) | success(*3) | success(*3)
+  **i386**   | failure(*4) | success(*3) | failure(*5)
+  **x32**(*1) | failure(*4) | success(*3) | failure(*5)
 
-injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
----|---|---|---
-**mips64el** | success (*6)    | success (*6) | success (*6) 
-**mipsel (n32)** | failure(*2) | success (*6) | success (*6) 
-**mipsel (o32)** | failure(*2) | success (*6) | success (*6) 
+  *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
+  *2: tested on github actions with both glibc and musl.  
+  *3: tested on github actions with glibc.  
+  *4: failure with `64-bit target process isn't supported by 32-bit process`.  
+  *5: failure with `x32-ABI target process is supported only by x86_64`.  
 
-*1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
-*2: failure with `64-bit target process isn't supported by 32-bit process`.  
-*3: failure with `x32-ABI target process is supported only by x86_64`.  
-*4: tested on github actions with glibc.  
-*5: tested on github actions with both glibc and musl.  
-*6: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
+* ARM
+
+  injector process \ target process | arm64 | armhf | armel
+  ---|---|---|---
+  **arm64** | success     | success | success
+  **armhf** | failure(*1) | success | success
+  **armel** | failure(*1) | success | success
+
+  *1: failure with `64-bit target process isn't supported by 32-bit process`.  
+
+* MIPS
+
+  injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
+  ---|---|---|---
+  **mips64el** | success (*1)    | success (*1) | success (*1)
+  **mipsel (n32)** | failure(*2) | success (*1) | success (*1)
+  **mipsel (o32)** | failure(*2) | success (*1) | success (*1)
+
+  *1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
+  *2: failure with `64-bit target process isn't supported by 32-bit process`.  
 
 ## Windows
 

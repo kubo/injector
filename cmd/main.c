@@ -111,6 +111,7 @@ int main(int argc, char **argv)
     int opt;
     int i;
     char *endptr;
+    int rv = 0;
 
     while ((opt = getopt(argc, argv, "n:p:")) != -1) {
         switch (opt) {
@@ -148,8 +149,9 @@ int main(int argc, char **argv)
         } else {
             fprintf(stderr, "could not inject \"%s\"\n", libname);
             fprintf(stderr, "  %s\n", injector_error());
+            rv = 1;
         }
     }
     injector_detach(injector);
-    return 0;
+    return rv;
 }

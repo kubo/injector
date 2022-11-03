@@ -6,7 +6,9 @@
 
 ## Linux
 
-**Note: Don't use this library in production environments. This may stop processes forever. See [Caveats](#caveats).**
+```diff
+- Don't use this in production environments. It may stop target processes forever. See Caveats. -
+```
 
 I was inspired by [`linux-inject`][] and the basic idea came from it.
 However the way to call `__libc_dlopen_mode` in `libc.so.6` is
@@ -178,12 +180,21 @@ injector process \ target process | x64 | x86 | arm64
 
 # Caveats
 
-[Caveat about `ptrace()`][] is same with `linux-inject`.
+**The following restrictions are only on Linux.**
 
-`__libc_dlopen_mode` internally calls `malloc()` and `free()`.
-If the target process is allocating or freeing memory and
-`malloc()` or `free()` holds a lock, this may stop the process
-forever. Same caveat is in `linux-inject` also.
+Injector doesn't work where `ptrace()` is disallowed.
+
+* Non-children processes (See [Caveat about `ptrace()`][])
+* Docker containers on docker version < 19.03 or linux kernel version < 4.8. You need to pass [`--cap-add=SYS_PTRACE`](https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities)
+to `docker run` to allow it in the environments.
+* Linux inside of UserLAnd (Android App) (See [here](https://github.com/kubo/injector/issues/17#issuecomment-1113990177))
+
+Injector calls functions inside of a target process interrupted by `ptrace()`.
+If the target process is interrupted while holding a non-reentrant lock and
+injector calls a function requiring the same lock, the process stops forever.
+If the lock type is reentrant, the status guarded by the lock may become inconsistent.
+As far as I checked, `dlopen()` internally calls `malloc()` requiring non-reentrant
+locks. `dlopen()` also uses a reentrant lock to guard information about loaded files.
 
 # License
 

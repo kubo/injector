@@ -1,14 +1,24 @@
+UNAME_S := $(shell uname -s)
 CFLAGS = -Wall -I../include
 
 all: injector
 
-injector: main.o ../src/linux/libinjector.a
-	$(CC) -o injector main.o ../src/linux/libinjector.a
+ifeq ($(UNAME_S),Darwin)
+OBJS = main.o ya_getopt.o
+OS = macos
+else
+OBJS = main.o
+OS = linux
+endif
+
+injector: $(OBJS) ../src/$(OS)/libinjector.a
+	$(CC) -o injector $(OBJS) ../src/$(OS)/libinjector.a
 
 main.o: main.c
-
-../src/linux/libinjlib.a:
-	cd ../src/linux && make
+ya_getopt.o: ../util/ya_getopt.c
+	$(CC) $(CFLAGS) -c ../util/ya_getopt.c
+../src/$(OS)/libinjlib.a:
+	cd ../src/$(OS) && make
 
 clean:
-	$(RM) injector main.o
+	$(RM) injector $(OBJS)

@@ -32,6 +32,7 @@
 #include <windows.h>
 #include <tlhelp32.h>
 #else
+#include <time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <limits.h>
@@ -46,6 +47,10 @@
 #define DLLEXT ".dll"
 #define INJECT_ERRMSG "LoadLibrary in the target process failed: The specified module could not be found."
 #define UNINJECT_ERRMSG "FreeLibrary in the target process failed: The specified module could not be found."
+#elif __APPLE__
+#define EXEEXT ""
+#define DLLEXT ".dylib"
+#define INJECT_ERRMSG "failed to get the full path of 'no such library': No such file or directory"
 #else
 #define EXEEXT ""
 #define DLLEXT ".so"
@@ -157,15 +162,10 @@ static void process_terminate(process_t *proc)
 struct process {
     pid_t pid;
     int waited;
+#ifndef __APPLE__
     int is_musl;
+#endif
 };
-
-static volatile sig_atomic_t caught_sigalarm;
-
-static void sighandler(int signo)
-{
-    caught_sigalarm = 1;
-}
 
 static int process_start(process_t *proc, char *test_target)
 {
@@ -178,6 +178,87 @@ static int process_start(process_t *proc, char *test_target)
     return 0;
 }
 
+#ifdef __APPLE__
+
+static int process_check_module(process_t *proc, const char *module_name, int startswith)
+{
+    char buf[PATH_MAX];
+    size_t len = strlen(module_name);
+    FILE *fp;
+
+    sprintf(buf, "vmmap -w %i", proc->pid);
+    fp = popen(buf, "r");
+    if (fp == NULL) {
+        printf("Could not open pipe %s\n", buf);
+        return -1;
+    }
+    while (fgets(buf, sizeof(buf), fp) != NULL) {
+        char *p = strrchr(buf, '/');
+		if(p == NULL){
+			continue;
+		}
+        if (p != NULL && memcmp(p + 1, module_name, len) == 0 && (startswith || p[len + 1] == '\n')) {
+            pclose(fp);
+            return 0;
+        }
+    }
+    pclose(fp);
+    return 1;
+}
+
+static int process_wait(process_t *proc, int wait_secs)
+{
+    int status;
+	long start_sec = time(0);
+	pid_t pid = proc->pid;
+	do{
+		if(time(0)-start_sec>wait_secs){
+			break;
+		}
+		if ((pid = waitpid(pid, &status, WNOHANG)) == -1)
+		{
+			printf("wait() error\n");
+		} else if(pid != 0){
+			if (WIFEXITED(status)) {
+				int exitcode = WEXITSTATUS(status);
+				if (exitcode == INCR_ON_INJECTION + INCR_ON_UNINJECTION) {
+					printf("SUCCESS: The injected library changed the exit_value variable in the target process!\n");
+					return 0;
+				} else if (exitcode == INCR_ON_INJECTION) {
+					printf("ERROR: The library was injected but not uninjected.\n");
+					return 1;
+				} else if (exitcode == 0) {
+					printf("ERROR: The injected library didn't change the return value of target process!\n");
+					return 1;
+				} else {
+					printf("ERROR: The target process exited with exit code %d.\n", exitcode);
+					return 1;
+				}
+			} else if (WIFEXITED(status)) {
+				int signo = WTERMSIG(status);
+				printf("ERROR: The target process exited by signal %d.\n", signo);
+				return 1;
+			} else if (WIFSTOPPED(status)) {
+				int signo = WSTOPSIG(status);
+				printf("ERROR: The target process stopped by signal %d.\n", signo);
+				return 1;
+			} else {
+				printf("ERROR: Unexpected waitpid status: 0x%x\n", status);
+				return 1;
+			}
+		 }
+	} while (pid == 0);
+    printf("ERROR: The target process didn't exit.\n");
+    return 1;
+}
+
+#else //linux
+static volatile sig_atomic_t caught_sigalarm;
+
+static void sighandler(int signo)
+{
+    caught_sigalarm = 1;
+}
 static int process_check_module(process_t *proc, const char *module_name, int startswith)
 {
     char buf[PATH_MAX];
@@ -258,7 +339,7 @@ static int process_wait(process_t *proc, int wait_secs)
     }
     return 1;
 }
-
+#endif
 static void process_terminate(process_t *proc)
 {
     int status;
@@ -299,7 +380,7 @@ int main(int argc, char **argv)
 
     sleep(1);
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
     can_uninject = 1;
 #else
     // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
@@ -373,7 +454,7 @@ int main(int argc, char **argv)
         }
     }
 
-    rv = process_wait(&proc, 6);
+    rv = process_wait(&proc, 8);
 cleanup:
     process_terminate(&proc);
     return rv;

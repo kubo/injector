@@ -103,7 +103,75 @@ static DWORD find_process(const char *name)
 }
 
 #endif
+#ifdef __APPLE__
+#define INVALID_PID -1
+#import <sys/sysctl.h>
+#include "../util/ya_getopt.h"
+static pid_t find_process(const char *name)
+{
+	pid_t pid = -1;
+    int max_arg_size = 0;
+	size_t size = sizeof(max_arg_size);
+	if (sysctl((int[]){ CTL_KERN, KERN_ARGMAX }, 2, &max_arg_size, &size, NULL, 0) != 0) {
+		max_arg_size = 4096; 
+	}
+	
+	int mib[3] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL};
+	struct kinfo_proc *processes = NULL;
+	char* buffer = NULL;
+	size_t length;
+	int count;
 
+	if (sysctl(mib, 3, NULL, &length, NULL, 0) < 0){
+		goto clean;
+	}
+	processes = malloc(length);
+	if (processes == NULL){
+		goto clean;
+	}
+	if (sysctl(mib, 3, processes, &length, NULL, 0) < 0) {
+		goto clean;
+	}
+	count = length / sizeof(struct kinfo_proc);
+	mib[0] = CTL_KERN;
+	mib[1] = KERN_PROCARGS2;
+	
+	buffer = (char *)malloc(max_arg_size);
+	for (int i = 0; i < count; i++) {
+		pid_t p_pid = processes[i].kp_proc.p_pid;
+		if (pid == 0) {
+			continue;
+		}
+		mib[2] = p_pid;
+		size = max_arg_size;
+		
+		if (sysctl(mib, 3, buffer, &size, NULL, 0) == 0) {
+			char* exe_path = buffer + sizeof(int);
+			char* exe_name = exe_path;
+			char* next = 0;
+			do{
+				next = strchr(exe_name, '/');
+				if(next != NULL){
+					exe_name = next + 1;
+				}
+			} while (next != NULL);
+			if(strcmp(exe_name, name) == 0){
+				pid = p_pid;
+				goto clean;
+			}
+		}
+	}
+clean:
+	if(buffer != 0){
+		free(buffer);
+	}
+	if(processes != 0){
+		free(processes);
+	}
+	
+	return pid;
+}
+#endif
 int main(int argc, char **argv)
 {
     injector_pid_t pid = INVALID_PID;

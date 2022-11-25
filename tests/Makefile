@@ -1,4 +1,4 @@
-UNAME_M := $(shell uname -m)
+UNAME_S := $(shell uname -s)
 
 BUILD_TARGETS =
 
@@ -151,7 +151,7 @@ riscv64:
 	@echo "=============== build: riscv64 ==============="; \
 	CC=riscv64-linux-gnu-gcc SUFFIX=-riscv64 $(MAKE) build
 
-ifeq ($(UNAME_M),Darwin)
+ifeq ($(UNAME_S),Darwin)
 POSTFIX = dylib
 else
 POSTFIX = so
@@ -159,7 +159,7 @@ endif
 
 build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).$(POSTFIX)
 test-prog$(SUFFIX): test-prog.c
-ifeq ($(UNAME_M),Darwin)
+ifeq ($(UNAME_S),Darwin)
 	cd ../src/macos && make clean && make
 	$(LINK_PROG) -o $@ $^ ../src/macos/libinjector.a
 else

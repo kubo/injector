@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/kubo/injector/actions/workflows/test.yml/badge.svg)](https://github.com/kubo/injector/actions/workflows/test.yml)
 
-**Library for injecting a shared library into a Linux or Windows process**
+**Library for injecting a shared library into a Linux, Windows and MacOS process**
 
 ## Linux
 

@@ -36,6 +36,8 @@ technique to load a DLL into another process with some improvements.
 **Note:** It may work on Windows on ARM though I have not tested it because
 I have no ARM machines. Let me know if it really works.
 
+## MacOS
+The injector connects to the target process using task_for_pid and creates a mach-thread. If dlopen is called in this thread, the target process will fail with an error, however, it is possible to create another thread using pthread_create_from_mach_thread function for Mac >= 10.12 or pthread_create otherwise. In the created thread, the code for loading the library is executed. The second thread is created when injector_inject is called and terminated when injector_detach is called.
 # Compilation
 
 ## Linux
@@ -75,6 +77,32 @@ The `nmake` command creates:
 |`src/windows/injectord.dll`        |a shared library (debug build)
 |`src/windows/injectord.lib`        |an import library for `injectord.dll`
 |`cmd/injector.exe`                 |a command line program linked the static library (release build)|
+
+## MacOS
+
+```shell
+$ git clone https://github.com/TheOiseth/injector.git
+$ cd injector
+$ make
+```
+
+The `make` command creates:
+
+| filename | - |
+|---|---|
+|`src/macos/libinjector.a`  |a static library|
+|`src/macos/libinjector.dylib` |a shared library|
+|`cmd/injector`             |a command line program linked with the static library|
+
+**Important:** in order for the injector process to connect to another process using task_for_pid, it is necessary to [`disable SIP`][] or sign the injector with a self-signed certificate with debugging permission, for this:
+```shell
+$ cd cmd/macos-sign
+$ chmod +x genkey.sh
+$ ./genkey.sh
+$ chmod +x sign.sh
+$ ./sign.sh
+```
+If injector still does not work after signing, reboot the system.
 
 # Usage
 
@@ -178,6 +206,17 @@ injector process \ target process | x64 | x86 | arm64
 *2: tested on github actions  
 *3: It may work though I have not tested it. Let me know if it really works.
 
+## MacOS
+
+injector process \ target process | x64 | arm64
+---|---|---
+**x64**     | success(*1) | failure(*2) 
+**arm64**   | failure(*3) | success        
+
+*1: failure with `x86_64 target process isn't supported by x86_64 process on ARM64 machine`.  
+*2: failure with `arm64 target process isn't supported by x86_64 process.`  
+*3: failure with `x86_64 target process isn't supported by arm64 process.`
+
 # Caveats
 
 **The following restrictions are only on Linux.**
@@ -210,3 +249,4 @@ Files under [`util`][] are licensed under 2-clause BSD.
 [`src`]: src
 [`util`]: util
 [`CreateRemoteThread+LoadLibrary`]: https://www.google.com/search?&q=CreateRemoteThread+LoadLIbrary
+[`disable SIP`]: https://developer.apple.com/documentation/security/disabling_and_enabling_system_integrity_protection

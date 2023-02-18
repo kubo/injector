@@ -6,9 +6,8 @@
 
 ## Linux
 
-```diff
-- Don't use this in production environments. It may stop target processes forever. See Caveats. -
-```
+> **Warning**  
+> Don't use this in production environments. It may stop target processes forever. See [Caveats](#caveats).
 
 I was inspired by [`linux-inject`][] and the basic idea came from it.
 However the way to call `__libc_dlopen_mode` in `libc.so.6` is

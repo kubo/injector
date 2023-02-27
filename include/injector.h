@@ -40,20 +40,20 @@ extern "C" {
 }
 #endif
 
-#define INJERR_SUCCESS 0               /* linux, windows */
-#define INJERR_OTHER -1                /* linux, windows */
-#define INJERR_NO_MEMORY -2            /* linux, windows */
-#define INJERR_NO_PROCESS -3           /* linux, windows */
+#define INJERR_SUCCESS 0               /* linux, windows, macos */
+#define INJERR_OTHER -1                /* linux, windows, macos */
+#define INJERR_NO_MEMORY -2            /* linux, windows, macos */
+#define INJERR_NO_PROCESS -3           /* linux, windows, macos */
 #define INJERR_NO_LIBRARY -4           /* linux */
 #define INJERR_NO_FUNCTION -4          /* linux */
-#define INJERR_ERROR_IN_TARGET -5      /* linux, windows */
-#define INJERR_FILE_NOT_FOUND -6       /* linux, windows */
-#define INJERR_INVALID_MEMORY_AREA -7  /* linux */
-#define INJERR_PERMISSION -8           /* linux, windows */
-#define INJERR_UNSUPPORTED_TARGET -9   /* linux, windows */
+#define INJERR_ERROR_IN_TARGET -5      /* linux, windows, macos */
+#define INJERR_FILE_NOT_FOUND -6       /* linux, windows, macos */
+#define INJERR_INVALID_MEMORY_AREA -7  /* linux, macos */
+#define INJERR_PERMISSION -8           /* linux, windows, macos */
+#define INJERR_UNSUPPORTED_TARGET -9   /* linux, windows, macos */
 #define INJERR_INVALID_ELF_FORMAT -10  /* linux */
 #define INJERR_WAIT_TRACEE -11         /* linux */
-#define INJERR_FUNCTION_MISSING -12    /* linux, windows */
+#define INJERR_FUNCTION_MISSING -12    /* linux, windows, macos */
 
 typedef struct injector injector_t;
 

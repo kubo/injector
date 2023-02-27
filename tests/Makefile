@@ -1,4 +1,4 @@
-UNAME_M := $(shell uname -m)
+UNAME_S := $(shell uname -s)
 
 BUILD_TARGETS =
 
@@ -151,16 +151,25 @@ riscv64:
 	@echo "=============== build: riscv64 ==============="; \
 	CC=riscv64-linux-gnu-gcc SUFFIX=-riscv64 $(MAKE) build
 
-build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).so
+ifeq ($(UNAME_S),Darwin)
+POSTFIX = dylib
+else
+POSTFIX = so
+endif
 
+build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).$(POSTFIX)
 test-prog$(SUFFIX): test-prog.c
+ifeq ($(UNAME_S),Darwin)
+	cd ../src/macos && make clean && make
+	$(LINK_PROG) -o $@ $^ ../src/macos/libinjector.a
+else
 	cd ../src/linux && make clean && make
 	$(LINK_PROG) -o $@ $^ ../src/linux/libinjector.a
-
+endif
 test-target$(SUFFIX): test-target.c
 	$(LINK_TARGET) -o $@ $^
 
-test-library$(SUFFIX).so: test-library.c
+test-library$(SUFFIX).$(POSTFIX): test-library.c
 	$(LINK_LIBRARY) -o $@ $^
 
 check: all
@@ -178,6 +187,6 @@ check: all
 	 done
 
 clean:
-	$(RM) test-prog test-prog-* test-target test-target-* test-library test-library-*.so 
+	$(RM) test-prog test-prog-* test-target test-target-* test-library test-library-*.so test-library*.so  test-library-*.dylib test-library*.dylib 
 
 .PHONY: default x86_64 i386 x32 arm64 armhf armel build check clean

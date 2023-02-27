@@ -25,7 +25,23 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
     }
     return TRUE;
 }
-#else
+#elif __APPLE__
+#include <dlfcn.h>
+static int *exit_value_addr;
+
+__attribute__((constructor))
+void init()
+{
+	exit_value_addr = dlsym(RTLD_DEFAULT, "exit_value");
+    *exit_value_addr += INCR_ON_INJECTION;
+}
+
+__attribute__((destructor))
+void fini()
+{
+     *exit_value_addr += INCR_ON_UNINJECTION;
+}
+#else //linux
 extern int exit_value;
 
 __attribute__((constructor))

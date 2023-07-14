@@ -18,6 +18,9 @@ jobs:
     - name: run tests
       run: |
         make check
+    - name: dlopen in cloned thread
+      run: |
+        cd tests && ./test-prog-x86_64 x86_64 --cloned-thread
 
   tests_on_mac:
     name: Tests on MacOS (x86_64)

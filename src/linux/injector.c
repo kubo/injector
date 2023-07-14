@@ -22,13 +22,20 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <alloca.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <errno.h>
 #include <dlfcn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 #include <limits.h>
 #include "injector_internal.h"
@@ -42,6 +49,7 @@ int injector_attach(injector_t **injector_out, pid_t pid)
     injector_t *injector;
     int status;
     long retval;
+    int prot;
     int rv = 0;
 
     injector__errmsg_is_set = 0;
@@ -97,9 +105,15 @@ int injector_attach(injector_t **injector_out, pid_t pid)
     injector->mmapped = 1;
     injector->data = (size_t)retval;
     injector->stack = (size_t)retval + 2 * injector->data_size;
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    injector->shellcode = (size_t)retval + 1 * injector->data_size;
+    prot = PROT_READ | PROT_EXEC;
+#else
+    prot = PROT_NONE;
+#endif
     rv = injector__call_syscall(injector, &retval, injector->sys_mprotect,
                                 injector->data + injector->data_size, injector->data_size,
-                                PROT_NONE);
+                                prot);
     if (rv != 0) {
         goto error_exit;
     }
@@ -108,6 +122,13 @@ int injector_attach(injector_t **injector_out, pid_t pid)
         rv = INJERR_ERROR_IN_TARGET;
         goto error_exit;
     }
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    rv = injector__write(injector, injector->shellcode, &injector_shellcode, injector_shellcode_size);
+    if (rv != 0) {
+        return rv;
+    }
+#endif
+
     *injector_out = injector;
     return 0;
 error_exit:
@@ -169,6 +190,100 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     }
     return 0;
 }
+
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+int injector_inject_in_cloned_thread(injector_t *injector, const char *path, void **handle_out)
+{
+    void *data;
+    injector_shellcode_arg_t *arg;
+    const size_t file_path_offset = offsetof(injector_shellcode_arg_t, file_path);
+    void * const invalid_handle = (void*)-3;
+    char abspath[PATH_MAX];
+    size_t pathlen;
+    int rv;
+    long retval;
+
+    if (injector->arch != ARCH_X86_64) {
+        injector__set_errmsg("injector_inject_in_cloned_thread doesn't support %s.",
+                             injector__arch2name(injector->arch));
+        return INJERR_UNSUPPORTED_TARGET;
+    }
+
+    if (realpath(path, abspath) == NULL) {
+        injector__set_errmsg("failed to get the full path of '%s': %s",
+                           path, strerror(errno));
+        return INJERR_FILE_NOT_FOUND;
+    }
+    pathlen = strlen(abspath) + 1;
+
+    if (file_path_offset + pathlen > injector->data_size) {
+        injector__set_errmsg("too long path name: %s", path);
+        return INJERR_FILE_NOT_FOUND;
+    }
+
+    data = alloca(injector->data_size);
+    memset(data, 0, injector->data_size);
+    arg = (injector_shellcode_arg_t *)data;
+
+    arg->handle = invalid_handle;
+    arg->dlopen_addr = injector->dlopen_addr;
+    arg->dlerror_addr = injector->dlerror_addr;
+    arg->dlflags = RTLD_LAZY;
+    if (injector->dlfunc_type == DLFUNC_INTERNAL) {
+        arg->dlflags |= __RTLD_DLOPEN;
+    }
+    memcpy(arg->file_path, abspath, pathlen);
+
+    rv = injector__write(injector, injector->data, data, injector->data_size);
+    if (rv != 0) {
+        return rv;
+    }
+    rv = injector__call_function(injector, &retval, injector->clone_addr,
+                                 injector->shellcode, injector->stack + injector->stack_size - 4096,
+                                 //CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID,
+                                 CLONE_VM,
+                                 injector->data);
+    if (rv != 0) {
+        return rv;
+    }
+    if (retval == -1) {
+        injector__set_errmsg("clone error: %s", strerror(errno));
+        return INJERR_ERROR_IN_TARGET;
+    }
+    const struct timespec ts = {0, 100000000}; /* 0.1 second */
+    void *handle;
+    int cnt = 0;
+
+retry:
+    nanosleep(&ts, NULL);
+    rv = injector__read(injector, injector->data, &handle, sizeof(handle));
+    if (rv != 0) {
+        return rv;
+    }
+    if (handle == invalid_handle) {
+        int max_retyr_cnt = 50;
+        if (++cnt <= max_retyr_cnt) {
+            goto retry;
+        }
+        injector__set_errmsg("dlopen doesn't return in %d seconds.", max_retyr_cnt / 10);
+        return INJERR_ERROR_IN_TARGET;
+    }
+    if (handle_out != NULL) {
+        *handle_out = handle;
+    }
+    if (handle == NULL) {
+        arg->file_path[0] = '\0';
+        injector__read(injector, injector->data, data, injector->data_size);
+        if (arg->file_path[0] != '\0') {
+            injector__set_errmsg("%s", arg->file_path);
+        } else {
+            injector__set_errmsg("dlopen error");
+        }
+        return INJERR_ERROR_IN_TARGET;
+    }
+    return 0;
+}
+#endif
 
 int injector_call(injector_t *injector, void *handle, const char* name)
 {

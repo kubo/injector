@@ -68,6 +68,12 @@ const char *injector_error(void);
 int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle);
 #endif
 
+#if defined(__linux__) && defined(__x86_64__)
+#define INJECTOR_HAS_INJECT_IN_CLONED_THREAD 1 // feature test macro
+// The next function is provided as it is. Use it at your own risk.
+int injector_inject_in_cloned_thread(injector_t *injector, const char *path, void **handle);
+#endif
+
 #if 0
 {
 #endif

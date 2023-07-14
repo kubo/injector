@@ -234,6 +234,12 @@ If the lock type is reentrant, the status guarded by the lock may become inconsi
 As far as I checked, `dlopen()` internally calls `malloc()` requiring non-reentrant
 locks. `dlopen()` also uses a reentrant lock to guard information about loaded files.
 
+On Linux x86_64 `injector_inject_in_cloned_thread` in place of `injector_inject`
+may be a solution of the locking issue. It calls `dlopen()` in a thread created by
+[`clone()`]. Note that no wonder there are unexpected pitfalls because some resources
+allocated in [`pthread_create()`] lack in the `clone()`-ed thread. Use it at
+your own risk.
+
 # License
 
 Files under [`include`][] and [`src`][] are licensed under LGPL 2.1 or later.  
@@ -243,8 +249,10 @@ Files under [`util`][] are licensed under 2-clause BSD.
 [`linux-inject`]: https://github.com/gaffe23/linux-inject
 [Caveat about `ptrace()`]: https://github.com/gaffe23/linux-inject#caveat-about-ptrace
 [`inject`]: https://github.com/gaffe23/linux-inject#usage
+[`clone()`]: https://man7.org/linux/man-pages/man2/clone.2.html
 [`cmd`]: cmd
 [`include`]: include
+[`pthread_create()`]: https://man7.org/linux/man-pages/man3/pthread_create.3.html
 [`src`]: src
 [`util`]: util
 [`CreateRemoteThread+LoadLibrary`]: https://www.google.com/search?&q=CreateRemoteThread+LoadLIbrary

@@ -114,6 +114,9 @@ struct injector {
     size_t dlclose_addr;
     size_t dlsym_addr;
     size_t dlerror_addr;
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    size_t clone_addr;
+#endif
     size_t code_addr; /* address where instructions are written */
     code_t backup_code;
     long sys_mmap;
@@ -137,6 +140,9 @@ struct injector {
     size_t data_size; /* page size */
     size_t stack; /* stack area */
     size_t stack_size; /* 2MB */
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    size_t shellcode;
+#endif
 };
 
 /* elf.c */
@@ -161,4 +167,19 @@ extern char injector__errmsg[];
 extern char injector__errmsg_is_set;
 void injector__set_errmsg(const char *format, ...);
 const char *injector__arch2name(arch_t arch);
+
+/* shellcode.S */
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+typedef struct {
+    void *handle;
+    size_t dlopen_addr;
+    size_t dlerror_addr;
+    int dlflags;
+    char file_path[0]; // dummy size.
+} injector_shellcode_arg_t;
+
+void *injector_shellcode(injector_shellcode_arg_t *arg);
+extern int injector_shellcode_size;
+#endif
+
 #endif

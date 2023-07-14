@@ -180,8 +180,14 @@ int main(int argc, char **argv)
     int i;
     char *endptr;
     int rv = 0;
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    const char *optstring = "n:p:T";
+    int cloned_thread = 0;
+#else
+    const char *optstring = "n:p:";
+#endif
 
-    while ((opt = getopt(argc, argv, "n:p:")) != -1) {
+    while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
         case 'n':
             pid = find_process(optarg);
@@ -199,6 +205,11 @@ int main(int argc, char **argv)
             }
             printf("targeting process with pid %d\n", pid);
             break;
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+        case 'T':
+            cloned_thread = 1;
+            break;
+#endif
         }
     }
     if (pid == INVALID_PID) {
@@ -212,6 +223,18 @@ int main(int argc, char **argv)
     }
     for (i = optind; i < argc; i++) {
         char *libname = argv[i];
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+        if (cloned_thread) {
+            if (injector_inject_in_cloned_thread(injector, libname, NULL) == 0) {
+                printf("clone thread to inject \"%s\" was created.\n", libname);
+            } else {
+                fprintf(stderr, "could not create cloned thread \"%s\"\n", libname);
+                fprintf(stderr, "  %s\n", injector_error());
+                rv = 1;
+            }
+            continue;
+        }
+#endif
         if (injector_inject(injector, libname, NULL) == 0) {
             printf("\"%s\" successfully injected\n", libname);
         } else {

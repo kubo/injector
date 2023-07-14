@@ -150,6 +150,13 @@ int injector__collect_libc_information(injector_t *injector)
         injector->dlerror_addr = 0;
     }
 
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+    rv = find_symbol_addr(&injector->clone_addr, &prm, "clone", "clone");
+    if (rv != 0) {
+        goto cleanup;
+    }
+#endif
+
     injector->dlfunc_type = prm.dlfunc_type;
     injector->code_addr = prm.libc_addr + ehdr.e_entry;
 

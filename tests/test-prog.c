@@ -363,10 +363,26 @@ int main(int argc, char **argv)
     int rv = 1;
     int loop_cnt;
     int can_uninject;
+    int (*inject_func)(injector_t *, const char *, void **) = injector_inject;
+    int i;
 
-    if (argc > 1) {
-        snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
-        suffix[sizeof(suffix) - 1] = '\0';
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--cloned-thread") == 0) {
+#ifdef INJECTOR_HAS_INJECT_IN_CLONED_THREAD
+                inject_func = injector_inject_in_cloned_thread;
+#else
+                fprintf(stderr, "injector_inject_in_cloned_thread isn't suported\n");
+                return 1;
+#endif
+            } else {
+                fprintf(stderr, "unknown option %s\n", argv[i]);
+                return 1;
+            }
+        } else {
+            snprintf(suffix, sizeof(suffix), "-%s", argv[1]);
+            suffix[sizeof(suffix) - 1] = '\0';
+        }
     }
 
     snprintf(test_target, sizeof(test_target), "test-target%s" EXEEXT, suffix);
@@ -400,14 +416,14 @@ int main(int argc, char **argv)
         fflush(stdout);
 
         if (loop_cnt == 0) {
-            if (injector_inject(injector, test_library, &handle) != 0) {
+            if (inject_func(injector, test_library, &handle) != 0) {
                 printf("inject error:\n  %s\n", injector_error());
                 goto cleanup;
             }
             printf("injected. (handle=%p)\n", handle);
             fflush(stdout);
 
-            if (injector_inject(injector, "no such library", &handle) == 0) {
+            if (inject_func(injector, "no such library", &handle) == 0) {
                 printf("injection should fail but succeeded:\n");
                 goto cleanup;
             }

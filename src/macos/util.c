@@ -56,52 +56,51 @@ void injector__set_errmsg(const char *format, ...)
 #define P_TRANSLATED    0x00020000
 #endif
 int injector__get_process_arch(pid_t pid, arch_t *arch){
-	int mib[CTL_MAXNAME] = {0};
-	mib[0] = CTL_KERN;
-	mib[1] = KERN_PROC;
-	mib[2] = KERN_PROC_PID;
-	mib[3] = pid;
-	size_t length = 4;
-	struct kinfo_proc proc_info = {0};	
-	size_t size = sizeof(proc_info);
-		
-	if(sysctl(mib, (u_int)length, &proc_info, &size, NULL, 0) != 0) {
-        *arch = ARCH_UNKNOWN;
-		return INJERR_SUCCESS;
-	}
-	if (size == 0) {
-	    injector__set_errmsg("Process %d not found", pid);
-        return INJERR_NO_PROCESS;
-	}
+    int mib[CTL_MAXNAME] = {0};
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = pid;
+    size_t length = 4;
+    struct kinfo_proc proc_info = {0};
+    size_t size = sizeof(proc_info);
 
-	if(P_TRANSLATED == (P_TRANSLATED & proc_info.kp_proc.p_flag)){
-		if(P_LP64 == (P_LP64 & proc_info.kp_proc.p_flag)){
-			*arch = ARCH_X86_64;
+    if(sysctl(mib, (u_int)length, &proc_info, &size, NULL, 0) != 0) {
+        *arch = ARCH_UNKNOWN;
+        return INJERR_SUCCESS;
+    }
+    if (size == 0) {
+        injector__set_errmsg("Process %d not found", pid);
+        return INJERR_NO_PROCESS;
+    }
+
+    if(P_TRANSLATED == (P_TRANSLATED & proc_info.kp_proc.p_flag)){
+        if(P_LP64 == (P_LP64 & proc_info.kp_proc.p_flag)){
+            *arch = ARCH_X86_64;
             return INJERR_SUCCESS;
-		} else {
-			*arch = ARCH_I386;
+        } else {
+            *arch = ARCH_I386;
             return INJERR_SUCCESS;
-		}
-	} else{
-		arch_t sys_arch = injector__get_system_arch();
-		if(sys_arch == ARCH_ARM64){
-			*arch = ARCH_ARM64;
-            return INJERR_SUCCESS;
-		}
-#if defined(__arm64__) || defined(__aarch64__)
-		if(sys_arch == ARCH_UNKNOWN){
+        }
+    } else {
+        arch_t sys_arch = injector__get_system_arch();
+        if(sys_arch == ARCH_ARM64){
             *arch = ARCH_ARM64;
             return INJERR_SUCCESS;
-		}
+        }
+#if defined(__arm64__) || defined(__aarch64__)
+        if(sys_arch == ARCH_UNKNOWN){
+            *arch = ARCH_ARM64;
+            return INJERR_SUCCESS;
+        }
 #endif
-	}
-	
+    }
 
-	if(P_LP64 == (P_LP64 & proc_info.kp_proc.p_flag)){
-	    *arch = ARCH_X86_64;
+    if(P_LP64 == (P_LP64 & proc_info.kp_proc.p_flag)){
+        *arch = ARCH_X86_64;
         return INJERR_SUCCESS;
-	}
-	*arch = ARCH_I386;
+    }
+    *arch = ARCH_I386;
     return INJERR_SUCCESS;
 }
 

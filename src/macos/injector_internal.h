@@ -118,5 +118,4 @@ extern char injector__errmsg_is_set;
 void injector__set_errmsg(const char *format, ...);
 const char *injector__arch2name(arch_t arch);
 int injector__get_process_arch(pid_t pid, arch_t *arch);
-bool injector__is_translated_process(pid_t pid);
 arch_t injector__get_system_arch();

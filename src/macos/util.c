@@ -136,21 +136,6 @@ arch_t injector__get_system_arch(){
 	}
 	return ARCH_UNKNOWN;
 }
-bool injector__is_translated_process(pid_t pid) {
-	int mib[CTL_MAXNAME] = {0};
-	mib[0] = CTL_KERN;
-	mib[1] = KERN_PROC;
-	mib[2] = KERN_PROC_PID;
-	mib[3] = pid;
-	size_t length = 4;
-	struct kinfo_proc proc_info = {0};	
-	size_t size = sizeof(proc_info);
-		
-	if(sysctl(mib, (u_int)length, &proc_info, &size, NULL, 0) != 0) {
-		return false; 
-	}
-	return P_TRANSLATED == (P_TRANSLATED & proc_info.kp_proc.p_flag);
-}
 const char *injector__arch2name(arch_t arch)
 {
     switch (arch) {

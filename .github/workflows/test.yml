@@ -13,6 +13,7 @@ jobs:
         submodules: true
     - name: Install packages
       run: |
+        sudo apt update
         sudo apt install -y gcc-multilib
     - name: run tests
       run: |

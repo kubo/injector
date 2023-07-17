@@ -34,6 +34,7 @@
 int injector_attach(injector_t **injector_out, pid_t pid)
 {
     injector_t *injector;
+    arch_t self_arch, target_arch;
     int rv = 0;
 
     injector__errmsg_is_set = 0;
@@ -44,9 +45,15 @@ int injector_attach(injector_t **injector_out, pid_t pid)
         return INJERR_NO_MEMORY;
     }
     injector->pid = pid;
-	arch_t self_arch = injector__get_process_arch(getpid());
-	arch_t target_arch = injector__get_process_arch(pid);
-	arch_t sys_arch = injector__get_system_arch(pid);
+	rv = injector__get_process_arch(getpid(), &self_arch);
+	if (rv != 0) {
+	    goto error_exit;
+	}
+	rv = injector__get_process_arch(pid, &target_arch);
+	if (rv != 0) {
+	    goto error_exit;
+	}
+	arch_t sys_arch = injector__get_system_arch();
 
 	if(self_arch != ARCH_UNKNOWN && target_arch != ARCH_UNKNOWN){
 		if(self_arch != target_arch){

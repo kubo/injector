@@ -19,6 +19,17 @@ jobs:
       run: |
         make check
 
+  tests_on_mac:
+    name: Tests on MacOS (x86_64)
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: run tests
+      run: |
+        sudo make check
+
   tests_on_windows:
     name: Tests on Windows (x64 and x86)
     runs-on: windows-latest

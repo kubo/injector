@@ -212,7 +212,7 @@ injector process \ target process | x64 | arm64
 **x64**     | success(*1) | failure(*2) 
 **arm64**   | failure(*3) | success        
 
-*1: failure with `x86_64 target process isn't supported by x86_64 process on ARM64 machine`.  
+*1: failure with `x86_64 target process isn't supported by x86_64 process on ARM64 machine`. Tested on github actions.  
 *2: failure with `arm64 target process isn't supported by x86_64 process.`  
 *3: failure with `x86_64 target process isn't supported by arm64 process.`
 

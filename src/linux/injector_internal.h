@@ -119,10 +119,24 @@ struct injector {
     long sys_mmap;
     long sys_mprotect;
     long sys_munmap;
-    size_t text; /* read only region */
-    size_t text_size;
+
+    /* memory layout allocated in the target process
+     *
+     *  high +----------------------+
+     *       |     stack area       |
+     *       |      size: 2MB       |
+     *       |----------------------|
+     *       |  inaccessible area   |
+     *       |      size: 4096      |
+     *       |----------------------|
+     *       |      data area       |
+     *       |      size: 4096      |
+     *  low  +----------------------+
+     */
+    size_t data; /* read-write region */
+    size_t data_size; /* page size */
     size_t stack; /* stack area */
-    size_t stack_size;
+    size_t stack_size; /* 2MB */
 };
 
 /* elf.c */

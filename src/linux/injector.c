@@ -33,6 +33,10 @@
 #include <limits.h>
 #include "injector_internal.h"
 
+static inline size_t remote_mem_size(injector_t *injector) {
+    return 2 * injector->data_size + injector->stack_size;
+}
+
 int injector_attach(injector_t **injector_out, pid_t pid)
 {
     injector_t *injector;
@@ -76,11 +80,11 @@ int injector_attach(injector_t **injector_out, pid_t pid)
         goto error_exit;
     }
 
-    injector->text_size = sysconf(_SC_PAGESIZE);
+    injector->data_size = sysconf(_SC_PAGESIZE);
     injector->stack_size = 2 * 1024 * 1024;
 
     rv = injector__call_syscall(injector, &retval, injector->sys_mmap, 0,
-                                injector->text_size + injector->stack_size, PROT_READ,
+                                remote_mem_size(injector), PROT_READ | PROT_WRITE,
                                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_GROWSDOWN, -1, 0);
     if (rv != 0) {
         goto error_exit;
@@ -91,11 +95,11 @@ int injector_attach(injector_t **injector_out, pid_t pid)
         goto error_exit;
     }
     injector->mmapped = 1;
-    injector->text = (size_t)retval;
-    injector->stack = injector->text + injector->text_size;
+    injector->data = (size_t)retval;
+    injector->stack = (size_t)retval + 2 * injector->data_size;
     rv = injector__call_syscall(injector, &retval, injector->sys_mprotect,
-                                injector->stack, injector->stack_size,
-                                PROT_READ | PROT_WRITE);
+                                injector->data + injector->data_size, injector->data_size,
+                                PROT_NONE);
     if (rv != 0) {
         goto error_exit;
     }
@@ -128,12 +132,12 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     }
     len = strlen(abspath) + 1;
 
-    if (len > injector->text_size) {
+    if (len > injector->data_size) {
         injector__set_errmsg("too long file path: %s", path);
         return INJERR_FILE_NOT_FOUND;
     }
 
-    rv = injector__write(injector, injector->text, abspath, len);
+    rv = injector__write(injector, injector->data, abspath, len);
     if (rv != 0) {
         return rv;
     }
@@ -141,7 +145,7 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
 #define __RTLD_DLOPEN	0x80000000 // glibc internal flag
         dlflags |= __RTLD_DLOPEN;
     }
-    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->text, dlflags);
+    rv = injector__call_function(injector, &retval, injector->dlopen_addr, injector->data, dlflags);
     if (rv != 0) {
         return rv;
     }
@@ -171,15 +175,15 @@ int injector_call(injector_t *injector, void *handle, const char* name)
     int rv;
     long retval;
     size_t len = strlen(name) + 1;
-    if (len > injector->text_size) {
+    if (len > injector->data_size) {
         injector__set_errmsg("too long function name: %s", name);
         return INJERR_FUNCTION_MISSING;
     }
-    rv = injector__write(injector, injector->text, name, len);
+    rv = injector__write(injector, injector->data, name, len);
     if (rv != 0) {
         return rv;
     }
-    rv = injector__call_function(injector, &retval, injector->dlsym_addr, handle, injector->text);
+    rv = injector__call_function(injector, &retval, injector->dlsym_addr, handle, injector->data);
     if (retval == 0) {
         injector__set_errmsg("function not found: %s", name);
         return INJERR_FUNCTION_MISSING;
@@ -210,7 +214,7 @@ int injector_detach(injector_t *injector)
     injector__errmsg_is_set = 0;
 
     if (injector->mmapped) {
-        injector__call_syscall(injector, NULL, injector->sys_munmap, injector->text, injector->text_size + injector->stack_size);
+        injector__call_syscall(injector, NULL, injector->sys_munmap, injector->data, remote_mem_size(injector));
     }
     if (injector->attached) {
         injector__detach_process(injector);

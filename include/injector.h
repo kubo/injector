@@ -27,10 +27,10 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-#define injector_pid_t DWORD
+typedef DWORD injector_pid_t;
 #else
 #include <sys/types.h>
-#define injector_pid_t pid_t
+typedef pid_t injector_pid_t;
 #endif
 
 #ifdef __cplusplus

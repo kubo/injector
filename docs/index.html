@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.9.1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Injector: Main Page</title>
+<title>Injector: Injector</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -60,11 +60,253 @@ $(function() {
 </iframe>
 </div>
 
-<div class="header">
+<div class="PageDoc"><div class="header">
   <div class="headertitle">
-<div class="title">Injector Documentation</div>  </div>
+<div class="title">Injector </div>  </div>
 </div><!--header-->
 <div class="contents">
+<div class="textblock"><p><a class="anchor" id="md_README"></a> <a href="https://github.com/kubo/injector/actions/workflows/test.yml"><img src="https://github.com/kubo/injector/actions/workflows/test.yml/badge.svg" alt="tests" style="pointer-events: none;" class="inline"/></a> <a href="http://www.jiubao.org/injector/injector_8h.html"><img src="https://img.shields.io/badge/docs-API_reference-blue" alt="Static Badge" class="inline"/></a></p>
+<p><b>Library for injecting a shared library into a Linux, Windows and MacOS process</b></p>
+<h1><a class="anchor" id="autotoc_md1"></a>
+Linux</h1>
+<blockquote class="doxtable">
+<p><b>Warning</b> <br  />
+ Don't use this in production environments. It may stop target processes forever. See <a href="#caveats">Caveats</a>. </p>
+</blockquote>
+<p>I was inspired by <a href="https://github.com/gaffe23/linux-inject"><code>linux-inject</code></a> and the basic idea came from it. However the way to call <code>__libc_dlopen_mode</code> in <code>libc.so.6</code> is thoroughly different.</p>
+<ul>
+<li><code>linux-inject</code> writes about 80 bytes of code to the target process on x86_64. This writes only 4 ~ 16 bytes.</li>
+<li><code>linux-inject</code> writes code at the firstly found executable region of memory, which may be referred by other threads. This writes it at <a href="https://sourceware.org/git/?p=glibc.git;a=blob;f=csu/version.c;h=8c0ed79c01223e1f12b54d19f90b5e5b7dd78d27;hb=c804cd1c00adde061ca51711f63068c103e94eef#l67">the entry point of <code>libc.so.6</code></a>, which will be referred by nobody unless the libc itself is executed as a program.</li>
+</ul>
+<h1><a class="anchor" id="autotoc_md2"></a>
+Windows</h1>
+<p>Windows version is also here. It uses well-known <a href="https://www.google.com/search?&amp;q=CreateRemoteThread+LoadLIbrary"><code>CreateRemoteThread+LoadLibrary</code></a> technique to load a DLL into another process with some improvements.</p>
+<ol type="1">
+<li>It gets Win32 error messages when <code>LoadLibrary</code> fails by copying assembly code into the target process.</li>
+<li>It can inject a 32-bit dll into a 32-bit process from x64 processes by checking the export entries in 32-bit kernel32.dll.</li>
+</ol>
+<p><b>Note:</b> It may work on Windows on ARM though I have not tested it because I have no ARM machines. Let me know if it really works.</p>
+<h1><a class="anchor" id="autotoc_md3"></a>
+MacOS</h1>
+<p>The injector connects to the target process using task_for_pid and creates a mach-thread. If dlopen is called in this thread, the target process will fail with an error, however, it is possible to create another thread using pthread_create_from_mach_thread function for Mac &gt;= 10.12 or pthread_create otherwise. In the created thread, the code for loading the library is executed. The second thread is created when injector_inject is called and terminated when injector_detach is called. </p>
+<h1><a class="anchor" id="autotoc_md4"></a>
+Compilation</h1>
+<h2><a class="anchor" id="autotoc_md5"></a>
+Linux</h2>
+<div class="fragment"><div class="line">$ git clone https://github.com/kubo/injector.git</div>
+<div class="line">$ cd injector</div>
+<div class="line">$ make</div>
+</div><!-- fragment --><p>The <code>make</code> command creates:</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">filename   </th><th class="markdownTableHeadNone">-    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>src/linux/libinjector.a</code>   </td><td class="markdownTableBodyNone">a static library    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><code>src/linux/libinjector.so</code>   </td><td class="markdownTableBodyNone">a shared library    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>cmd/injector</code>   </td><td class="markdownTableBodyNone">a command line program linked with the static library   </td></tr>
+</table>
+<h2><a class="anchor" id="autotoc_md6"></a>
+Windows</h2>
+<p>Open a Visual Studio command prompt and run the following commands:</p>
+<div class="fragment"><div class="line">$ git clone https://github.com/kubo/injector.git # Or use any other tool</div>
+<div class="line">$ cd injector</div>
+<div class="line">$ nmake -f Makefile.win32</div>
+</div><!-- fragment --><p>The <code>nmake</code> command creates:</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">filename   </th><th class="markdownTableHeadNone">-    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>src/windows/injector-static.lib</code>   </td><td class="markdownTableBodyNone">a static library (release build)    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><code>src/windows/injector.dll</code>   </td><td class="markdownTableBodyNone">a shared library (release build)    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>src/windows/injector.lib</code>   </td><td class="markdownTableBodyNone">an import library for <code>injector.dll</code>    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><code>src/windows/injectord-static.lib</code>   </td><td class="markdownTableBodyNone">a static library (debug build)    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>src/windows/injectord.dll</code>   </td><td class="markdownTableBodyNone">a shared library (debug build)    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><code>src/windows/injectord.lib</code>   </td><td class="markdownTableBodyNone">an import library for <code>injectord.dll</code>    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>cmd/injector.exe</code>   </td><td class="markdownTableBodyNone">a command line program linked the static library (release build)   </td></tr>
+</table>
+<h2><a class="anchor" id="autotoc_md7"></a>
+MacOS</h2>
+<div class="fragment"><div class="line">$ git clone https://github.com/TheOiseth/injector.git</div>
+<div class="line">$ cd injector</div>
+<div class="line">$ make</div>
+</div><!-- fragment --><p>The <code>make</code> command creates:</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">filename   </th><th class="markdownTableHeadNone">-    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>src/macos/libinjector.a</code>   </td><td class="markdownTableBodyNone">a static library    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><code>src/macos/libinjector.dylib</code>   </td><td class="markdownTableBodyNone">a shared library    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><code>cmd/injector</code>   </td><td class="markdownTableBodyNone">a command line program linked with the static library   </td></tr>
+</table>
+<p><b>Important:</b> in order for the injector process to connect to another process using task_for_pid, it is necessary to <a href="https://developer.apple.com/documentation/security/disabling_and_enabling_system_integrity_protection"><code>disable SIP</code></a> or sign the injector with a self-signed certificate with debugging permission, for this: </p><div class="fragment"><div class="line">$ cd cmd/macos-sign</div>
+<div class="line">$ chmod +x genkey.sh</div>
+<div class="line">$ ./genkey.sh</div>
+<div class="line">$ chmod +x sign.sh</div>
+<div class="line">$ ./sign.sh</div>
+</div><!-- fragment --><p> If injector still does not work after signing, reboot the system.</p>
+<h1><a class="anchor" id="autotoc_md8"></a>
+Usage</h1>
+<h2><a class="anchor" id="autotoc_md9"></a>
+C API</h2>
+<div class="fragment"><div class="line"><span class="preprocessor">#include &lt;<a class="code" href="injector_8h.html">injector.h</a>&gt;</span></div>
+<div class="line"> </div>
+<div class="line">...</div>
+<div class="line"> </div>
+<div class="line">    injector_t *injector;</div>
+<div class="line">    <span class="keywordtype">void</span> *handle;</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">/* attach to a process whose process id is 1234. */</span></div>
+<div class="line">    <span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a875ece6d1a384097a3c2f09cf8c0406a">injector_attach</a>(&amp;injector, 1234) != 0) {</div>
+<div class="line">        printf(<span class="stringliteral">&quot;ATTACH ERROR: %s\n&quot;</span>, <a class="code" href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a>());</div>
+<div class="line">        <span class="keywordflow">return</span>;</div>
+<div class="line">    }</div>
+<div class="line">    <span class="comment">/* inject a shared library into the process. */</span></div>
+<div class="line">    <span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a86644861b6e75616994c22a0b9a038f5">injector_inject</a>(injector, <span class="stringliteral">&quot;/path/to/shared/library&quot;</span>, NULL) != 0) {</div>
+<div class="line">        printf(<span class="stringliteral">&quot;INJECT ERROR: %s\n&quot;</span>, <a class="code" href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a>());</div>
+<div class="line">    }</div>
+<div class="line">    <span class="comment">/* inject another shared library. */</span></div>
+<div class="line">    <span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a86644861b6e75616994c22a0b9a038f5">injector_inject</a>(injector, <span class="stringliteral">&quot;/path/to/another/shared/library&quot;</span>, &amp;handle) != 0) {</div>
+<div class="line">        printf(<span class="stringliteral">&quot;INJECT ERROR: %s\n&quot;</span>, <a class="code" href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a>());</div>
+<div class="line">    }</div>
+<div class="line"> </div>
+<div class="line">...</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">/* uninject the second shared library. */</span></div>
+<div class="line">    <span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#ad56227cc68b58213c19b600c8cb85292">injector_uninject</a>(injector, handle) != 0) {</div>
+<div class="line">        printf(<span class="stringliteral">&quot;UNINJECT ERROR: %s\n&quot;</span>, <a class="code" href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a>());</div>
+<div class="line">    }</div>
+<div class="line"> </div>
+<div class="line">    <span class="comment">/* cleanup */</span></div>
+<div class="line">    <a class="code" href="injector_8h.html#ad797b8baca0098fa09659c8b3ac913af">injector_detach</a>(injector);</div>
+<div class="ttc" id="ainjector_8h_html"><div class="ttname"><a href="injector_8h.html">injector.h</a></div><div class="ttdoc">Library for injecting a shared library into a Linux, Windows and macOS process.</div></div>
+<div class="ttc" id="ainjector_8h_html_a7eacadf1235e4afbccd155d9b4c96ba5"><div class="ttname"><a href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a></div><div class="ttdeci">const char * injector_error(void)</div><div class="ttdoc">Get the message of the last error.</div></div>
+<div class="ttc" id="ainjector_8h_html_a86644861b6e75616994c22a0b9a038f5"><div class="ttname"><a href="injector_8h.html#a86644861b6e75616994c22a0b9a038f5">injector_inject</a></div><div class="ttdeci">int injector_inject(injector_t *injector, const char *path, void **handle)</div><div class="ttdoc">Inject the specified shared library into the target process.</div></div>
+<div class="ttc" id="ainjector_8h_html_a875ece6d1a384097a3c2f09cf8c0406a"><div class="ttname"><a href="injector_8h.html#a875ece6d1a384097a3c2f09cf8c0406a">injector_attach</a></div><div class="ttdeci">int injector_attach(injector_t **injector, injector_pid_t pid)</div><div class="ttdoc">Attach to the specified process.</div></div>
+<div class="ttc" id="ainjector_8h_html_ad56227cc68b58213c19b600c8cb85292"><div class="ttname"><a href="injector_8h.html#ad56227cc68b58213c19b600c8cb85292">injector_uninject</a></div><div class="ttdeci">int injector_uninject(injector_t *injector, void *handle)</div><div class="ttdoc">Uninject the shared library specified by handle.</div></div>
+<div class="ttc" id="ainjector_8h_html_ad797b8baca0098fa09659c8b3ac913af"><div class="ttname"><a href="injector_8h.html#ad797b8baca0098fa09659c8b3ac913af">injector_detach</a></div><div class="ttdeci">int injector_detach(injector_t *injector)</div><div class="ttdoc">Detach from the attached process and destroy the specified handle.</div></div>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md10"></a>
+Command line program</h2>
+<p>See <a href="https://github.com/gaffe23/linux-inject#usage"><code>Usage</code> section and <code>Sample</code> section in linux-inject</a> and substitute <code>inject</code> with <code>injector</code> in the page.</p>
+<h1><a class="anchor" id="autotoc_md11"></a>
+Tested Architectures</h1>
+<h2><a class="anchor" id="autotoc_md12"></a>
+Linux</h2>
+<ul>
+<li>x86</li>
+</ul>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x86_64   </th><th class="markdownTableHeadNone">i386   </th><th class="markdownTableHeadNone">x32(*1)    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x86_64</b>   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">success(*3)    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>i386</b>   </td><td class="markdownTableBodyNone">failure(*4)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">failure(*5)    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x32</b>(*1)   </td><td class="markdownTableBodyNone">failure(*4)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">failure(*5)   </td></tr>
+</table>
+<p>*1: <a href="https://en.wikipedia.org/wiki/X32_ABI">x32 ABI</a> <br  />
+ *2: tested on github actions with both glibc and musl. <br  />
+ *3: tested on github actions with glibc. <br  />
+ *4: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
+ *5: failure with <code>x32-ABI target process is supported only by x86_64</code>. <br  />
+</p>
+<ul>
+<li>ARM</li>
+</ul>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">arm64   </th><th class="markdownTableHeadNone">armhf   </th><th class="markdownTableHeadNone">armel    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>armhf</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>armel</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success   </td></tr>
+</table>
+<p>*1: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
+</p>
+<ul>
+<li>MIPS</li>
+</ul>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">mips64el   </th><th class="markdownTableHeadNone">mipsel (n32)   </th><th class="markdownTableHeadNone">mipsel (o32)    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>mips64el</b>   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>mipsel (n32)</b>   </td><td class="markdownTableBodyNone">failure(*2)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>mipsel (o32)</b>   </td><td class="markdownTableBodyNone">failure(*2)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)   </td></tr>
+</table>
+<p>*1: tested on <a href="https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271">debian 11 mips64el</a> on <a href="https://www.qemu.org/">QEMU</a>. <br  />
+ *2: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
+</p>
+<ul>
+<li>PowerPC<ul>
+<li><b>ppc64le</b> (tested on <a href="https://dl-cdn.alpinelinux.org/alpine/v3.16/releases/ppc64le/">alpine 3.16.2 ppc64le</a> on <a href="https://www.qemu.org/">QEMU</a>)</li>
+<li><b>powerpc (big endian)</b> (tested on <a href="https://old-releases.ubuntu.com/releases/xenial/">ubuntu 16.04 powerpc</a> on <a href="https://www.qemu.org/">QEMU</a></li>
+</ul>
+</li>
+<li>RISC-V<ul>
+<li><b>riscv64</b> (tested on <a href="https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU">Ubuntu 22.04.1 riscv64 on QEMU</a>)</li>
+</ul>
+</li>
+</ul>
+<h2><a class="anchor" id="autotoc_md13"></a>
+Windows</h2>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86   </th><th class="markdownTableHeadNone">arm64    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">-    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>x86</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">-    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">-   </td><td class="markdownTableBodyNone">-   </td><td class="markdownTableBodyNone">not tested(*3)   </td></tr>
+</table>
+<p>*1: failure with <code>x64 target process isn't supported by x86 process</code>. <br  />
+ *2: tested on github actions <br  />
+ *3: It may work though I have not tested it. Let me know if it really works.</p>
+<h2><a class="anchor" id="autotoc_md14"></a>
+MacOS</h2>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">arm64    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">success(*1)   </td><td class="markdownTableBodyNone">failure(*2)    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">failure(*3)   </td><td class="markdownTableBodyNone">success   </td></tr>
+</table>
+<p>*1: failure with <code>x86_64 target process isn't supported by x86_64 process on ARM64 machine</code>. Tested on github actions. <br  />
+ *2: failure with <code>arm64 target process isn't supported by x86_64 process.</code> <br  />
+ *3: failure with <code>x86_64 target process isn't supported by arm64 process.</code></p>
+<h1><a class="anchor" id="autotoc_md15"></a>
+Caveats</h1>
+<p><b>The following restrictions are only on Linux.</b></p>
+<p>Injector doesn't work where <code>ptrace()</code> is disallowed.</p>
+<ul>
+<li>Non-children processes (See <a href="https://github.com/gaffe23/linux-inject#caveat-about-ptrace">Caveat about <code>ptrace()</code></a>)</li>
+<li>Docker containers on docker version &lt; 19.03 or linux kernel version &lt; 4.8. You need to pass <a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities"><code>--cap-add=SYS_PTRACE</code></a> to <code>docker run</code> to allow it in the environments.</li>
+<li>Linux inside of UserLAnd (Android App) (See <a href="https://github.com/kubo/injector/issues/17#issuecomment-1113990177">here</a>)</li>
+</ul>
+<p>Injector calls functions inside of a target process interrupted by <code>ptrace()</code>. If the target process is interrupted while holding a non-reentrant lock and injector calls a function requiring the same lock, the process stops forever. If the lock type is reentrant, the status guarded by the lock may become inconsistent. As far as I checked, <code>dlopen()</code> internally calls <code>malloc()</code> requiring non-reentrant locks. <code>dlopen()</code> also uses a reentrant lock to guard information about loaded files.</p>
+<p>On Linux x86_64 <code>injector_inject_in_cloned_thread</code> in place of <code>injector_inject</code> may be a solution of the locking issue. It calls <code>dlopen()</code> in a thread created by <a href="https://man7.org/linux/man-pages/man2/clone.2.html"><code>clone()</code></a>. Note that no wonder there are unexpected pitfalls because some resources allocated in <a href="https://man7.org/linux/man-pages/man3/pthread_create.3.html"><code>pthread_create()</code></a> lack in the <code>clone()</code>-ed thread. Use it at your own risk.</p>
+<h1><a class="anchor" id="autotoc_md16"></a>
+License</h1>
+<p>Files under [<code>include</code>][] and [<code>src</code>][] are licensed under LGPL 2.1 or later. <br  />
+ Files under [<code>cmd</code>][] are licensed under GPL 2 or later. <br  />
+ Files under [<code>util</code>][] are licensed under 2-clause BSD. </p>
+</div></div><!-- PageDoc -->
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

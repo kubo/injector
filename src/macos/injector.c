@@ -185,6 +185,9 @@ int injector_call(injector_t *injector, void *handle, const char* name)
     int rv;
     long retval;
     size_t len = strlen(name) + 1;
+
+    injector__errmsg_is_set = 0;
+
     if (len > injector->text_size) {
         injector__set_errmsg("too long function name: %s", name);
         return INJERR_FUNCTION_MISSING;

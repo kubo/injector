@@ -37,7 +37,7 @@ typedef DWORD injector_pid_t;
 #include <sys/types.h>
 
 /*!
- * \brief \c pid_t on Unix. \c DWORD on Windows.
+ * \brief Platform-dependent process id type (\c pid_t on Unix. \c DWORD on Windows)
  */
 typedef pid_t injector_pid_t;
 #endif

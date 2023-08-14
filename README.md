@@ -1,6 +1,7 @@
 # Injector
 
 [![tests](https://github.com/kubo/injector/actions/workflows/test.yml/badge.svg)](https://github.com/kubo/injector/actions/workflows/test.yml)
+[![Static Badge](https://img.shields.io/badge/docs-API_reference-blue)](http://www.jiubao.org/injector/injector_8h.html)
 
 **Library for injecting a shared library into a Linux, Windows and MacOS process**
 

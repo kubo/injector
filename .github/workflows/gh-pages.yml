@@ -1,0 +1,28 @@
+on: 
+  push:
+    branches: [master]
+    
+jobs:
+  gh-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: install doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen
+      - name: genereate docs
+        run: |
+          doxygen
+      - name: push docs
+        run: |
+          git fetch --depth=1 origin gh-pages
+          git checkout gh-pages
+          rm -rf docs
+          mv html docs
+          git config --local user.email "docs-action@github.com"
+          git config --local user.name "GitHub Action (docs)"
+          git add docs
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git commit -m 'Add docs'
+          git push origin gh-pages

@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -28,6 +28,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <inttypes.h>
 #ifdef _WIN32
 #include <windows.h>
 #include <tlhelp32.h>
@@ -352,6 +353,37 @@ static void process_terminate(process_t *proc)
 
 #endif
 
+static int test_remote_call(injector_t *injector, void *handle)
+{
+#if defined(__linux__) || defined(_WIN32)
+    printf("test remote call.\n");
+    fflush(stdout);
+
+    size_t func_addr;
+    if (injector_remote_func_addr(injector, handle, "sum_integers", &func_addr) != 0) {
+        printf("injector_remote_func_addr error:\n  %s\n", injector_error());
+        return -1;
+    }
+    intptr_t retval;
+    intptr_t args[6] = {1, 2, 3, 4, 5, 6};
+    int i;
+    for (i = 0; i < 6; i++) {
+        args[i] += 10;
+        intptr_t expected_retval = args[0] + args[1] + args[2] + args[3] + args[4] + args[5];
+        if (injector_remote_call(injector, &retval, func_addr, args[0], args[1], args[2], args[3], args[4], args[5]) != 0) {
+            printf("injector_remote_call error:\n  %s\n", injector_error());
+            return -1;
+        }
+        if (retval != expected_retval) {
+            printf("sum_integers(%" PRIdPTR ", %" PRIdPTR ", %" PRIdPTR ", %" PRIdPTR ", %" PRIdPTR ", %" PRIdPTR ") returns %" PRIdPTR " (expected %" PRIdPTR ")\n",
+                   args[0], args[1], args[2], args[3], args[4], args[5], retval, expected_retval);
+            return -1;
+        }
+    }
+#endif
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char suffix[20] = {0,};
@@ -430,6 +462,9 @@ int main(int argc, char **argv)
             errmsg = injector_error();
             if (strncmp(errmsg, INJECT_ERRMSG, strlen(INJECT_ERRMSG)) != 0) {
                 printf("unexpected injection error message: %s\nexpected: %s\n", errmsg, INJECT_ERRMSG);
+                goto cleanup;
+            }
+            if (test_remote_call(injector, handle) != 0) {
                 goto cleanup;
             }
         } else {

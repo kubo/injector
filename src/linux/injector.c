@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -48,7 +48,7 @@ int injector_attach(injector_t **injector_out, pid_t pid)
 {
     injector_t *injector;
     int status;
-    long retval;
+    intptr_t retval;
     int prot;
     int rv = 0;
 
@@ -142,7 +142,7 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
     int dlflags = RTLD_LAZY;
     size_t len;
     int rv;
-    long retval;
+    intptr_t retval;
 
     injector__errmsg_is_set = 0;
 
@@ -201,7 +201,7 @@ int injector_inject_in_cloned_thread(injector_t *injector, const char *path, voi
     char abspath[PATH_MAX];
     size_t pathlen;
     int rv;
-    long retval;
+    intptr_t retval;
 
     injector__errmsg_is_set = 0;
 
@@ -287,10 +287,10 @@ retry:
 }
 #endif
 
-int injector_call(injector_t *injector, void *handle, const char* name)
+int injector_remote_func_addr(injector_t *injector, void *handle, const char* name, size_t *func_addr_out)
 {
     int rv;
-    long retval;
+    intptr_t retval;
     size_t len = strlen(name) + 1;
 
     injector__errmsg_is_set = 0;
@@ -304,17 +304,48 @@ int injector_call(injector_t *injector, void *handle, const char* name)
         return rv;
     }
     rv = injector__call_function(injector, &retval, injector->dlsym_addr, handle, injector->data);
+    if (rv != 0) {
+        return rv;
+    }
     if (retval == 0) {
         injector__set_errmsg("function not found: %s", name);
         return INJERR_FUNCTION_MISSING;
     }
-    return injector__call_function(injector, &retval, retval);
+    *func_addr_out = (size_t)retval;
+    return 0;
+}
+
+int injector_remote_call(injector_t *injector, intptr_t *retval, size_t func_addr, ...)
+{
+    va_list ap;
+    int rv;
+    injector__errmsg_is_set = 0;
+    va_start(ap, func_addr);
+    rv = injector__call_function_va_list(injector, retval, func_addr, ap);
+    va_end(ap);
+    return rv;
+}
+
+int injector_remote_vcall(injector_t *injector, intptr_t *retval, size_t func_addr, va_list ap)
+{
+    injector__errmsg_is_set = 0;
+    return injector__call_function_va_list(injector, retval, func_addr, ap);
+}
+
+int injector_call(injector_t *injector, void *handle, const char* name)
+{
+    size_t func_addr;
+    int rv = injector_remote_func_addr(injector, handle, name, &func_addr);
+    if (rv != 0) {
+        return rv;
+    }
+    return injector__call_function(injector, NULL, func_addr);
 }
 
 int injector_uninject(injector_t *injector, void *handle)
 {
     int rv;
-    long retval;
+    intptr_t retval;
 
     injector__errmsg_is_set = 0;
 

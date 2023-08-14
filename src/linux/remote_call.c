@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -210,7 +210,7 @@ static int kick_then_wait_sigtrap(const injector_t *injector, struct user_regs_s
  * The arguments after syscall_number must be integer types and
  * the size must not be greater than the size of long.
  */
-int injector__call_syscall(const injector_t *injector, long *retval, long syscall_number, ...)
+int injector__call_syscall(const injector_t *injector, intptr_t *retval, long syscall_number, ...)
 {
     struct user_regs_struct regs = injector->regs;
     code_t code;
@@ -440,7 +440,7 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
     if (retval != NULL) {
 #if defined(__mips__)
         if (regs.regs[REG_A3] == 0) {
-            *retval = (long)regs.regs[REG_V0];
+            *retval = (intptr_t)regs.regs[REG_V0];
         } else {
             errno = (int)regs.regs[REG_V0];
             *retval = -1;
@@ -451,13 +451,13 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
             errno = (int)regs.gpr[PT_R3];
             *retval = -1;
         } else {
-            *retval = (long)regs.gpr[PT_R3];
+            *retval = (intptr_t)regs.gpr[PT_R3];
         }
 #else
 #if defined(__aarch64__)
         if (reg32_return != NULL) {
             if (*reg32_return <= -4096u) {
-                *retval = (long)*reg32_return;
+                *retval = (intptr_t)*reg32_return;
             } else {
                 errno = -((int)*reg32_return);
                 *retval = -1;
@@ -465,9 +465,9 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
         } else {
 #endif
             if ((unsigned long)*reg_return <= -4096ul) {
-                *retval = (long)*reg_return;
+                *retval = (intptr_t)*reg_return;
             } else {
-                errno = -((long)*reg_return);
+                errno = -((int)*reg_return);
                 *retval = -1;
             }
 #if defined(__aarch64__)
@@ -484,13 +484,28 @@ int injector__call_syscall(const injector_t *injector, long *retval, long syscal
  * The arguments after function_addr must be integer types and
  * the size must not be greater than the size of long.
  */
-int injector__call_function(const injector_t *injector, long *retval, long function_addr, ...)
+int injector__call_function(const injector_t *injector, intptr_t *retval, long function_addr, ...)
+{
+    va_list ap;
+    int rv;
+    va_start(ap, function_addr);
+    rv = injector__call_function_va_list(injector, retval, function_addr, ap);
+    va_end(ap);
+    return rv;
+}
+
+/*
+ * Call the function at the specified address in the target process.
+ *
+ * The arguments after function_addr must be integer types and
+ * the size must not be greater than the size of long.
+ */
+int injector__call_function_va_list(const injector_t *injector, intptr_t *retval, long function_addr, va_list ap)
 {
     struct user_regs_struct regs = injector->regs;
     code_t code;
     size_t code_size;
     long arg1, arg2, arg3, arg4, arg5, arg6;
-    va_list ap;
     int rv;
     user_reg_t *reg_return = NULL;
 #if defined(__aarch64__)
@@ -498,14 +513,12 @@ int injector__call_function(const injector_t *injector, long *retval, long funct
     uint32_t *uregs = (uint32_t *)&regs;
 #endif
 
-    va_start(ap, function_addr);
     arg1 = va_arg(ap, long);
     arg2 = va_arg(ap, long);
     arg3 = va_arg(ap, long);
     arg4 = va_arg(ap, long);
     arg5 = va_arg(ap, long);
     arg6 = va_arg(ap, long);
-    va_end(ap);
 
     DEBUG("injector__call_function:\n");
     DEBUG("  args: %lx, %lx, %lx, %lx, %lx, %lx, %lx\n", function_addr, arg1, arg2, arg3, arg4, arg5, arg6);

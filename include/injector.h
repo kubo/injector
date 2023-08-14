@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018-2019 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -110,16 +110,20 @@ int injector_uninject(injector_t *injector, void *handle);
 
 #if defined(INJECTOR_DOC) || defined(__linux__) || defined(__APPLE__)
 /*!
- * \brief Call the specified function taking no arguments in the target process (only Linux and macOS)
+ * \brief Call the specified function taking no arguments in the target process (Linux and macOS only)
  * \param[in]   injector the injector handle specifying the target process
  * \param[in]   handle   the module handle created by \c injector_inject or special-handles such as \c RTLD_DEFAULT
  * \param[in]   name     the function name
  *
  * The \c handle and \c name arguments are passed to \c dlsym ([Linux](https://man7.org/linux/man-pages/man3/dlvsym.3.html), [macOS](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/dlsym.3.html)) and then the return value of \c dlsym is called without arguments in the target process.
  *
- * Note on Linux: The function is called inside of the target process interrupted by \c ptrace().
- * Calling any function except [async-signal-safe](https://man7.org/linux/man-pages/man7/signal-safety.7.html)
- * is unsafe.
+ * This is same with the combination of injector_remote_func_addr() and injector_remote_call() without extra arguments.
+ *
+ * \note
+ *   (Linux only)
+ *   If the function in the target process internally calls non-[async-signal-safe]((https://man7.org/linux/man-pages/man7/signal-safety.7.html))
+ *   functions, it may stop the target process or cause unexpected behaviour.
+ * \sa injector_remote_func_addr(), injector_remote_call(), injector_remote_vcall()
  */
 int injector_call(injector_t *injector, void *handle, const char* name);
 #endif
@@ -130,9 +134,78 @@ int injector_call(injector_t *injector, void *handle, const char* name);
  */
 const char *injector_error(void);
 
+#if defined(INJECTOR_DOC) || defined(__linux__) || defined(_WIN32)
+#include <stdarg.h>
+#include <stdint.h>
+
+/*!
+ * \brief Get the function address in the target process (Linux only)
+ * \param[in]   injector      the injector handle specifying the target process
+ * \param[in]   handle        the module handle created by \c injector_inject or special-handles such as \c RTLD_DEFAULT
+ * \param[in]   name          the function name
+ * \param[out]  func_addr_out the address where the function address in the target process will be stored
+ * \return                    zero on success. Otherwise, error code
+ *
+ * \b Example
+ * \code
+ * // Inject libfoo.so and then call foo_func(1, 2, 3) in it.
+ * void *handle;
+ * if (injector_inject(injector, "libfoo.so", &handle) != 0) {
+ *    return;
+ * }
+ * size_t func_addr;
+ * if (injector_remote_func_addr(injector, handle, "foo_func", &func_addr) != 0) {
+ *    return;
+ * }
+ * long retval;
+ * if (injector_remote_call(injector, &retval, func_addr, 1, 2, 3) != 0) {
+ *    return;
+ * }
+ * printf("The return value of foo_func(1, 2, 3) is %ld.\n", retval);
+ * \endcode
+ */
+int injector_remote_func_addr(injector_t *injector, void *handle, const char* name, size_t *func_addr_out);
+
+/*!
+ * \brief Call the function in the target process (Linux only)
+ * \param[in]   injector  the injector handle specifying the target process
+ * \param[out]  retval    \c NULL or the address where the return value of the function call will be stored
+ * \param[in]   func_addr the function address in the target process
+ * \param[in]   ...       arguments passed to the function
+ * \return                zero on success. Otherwise, error code
+ * \remarks
+ *   The types of the arguments must be integer or pointer.
+ *   If it is a pointer, it must point to a valid address in the target process.
+ *   The number of arguments must be less than or equal to six.
+ * \note
+ *   If the function in the target process internally calls non-[async-signal-safe]((https://man7.org/linux/man-pages/man7/signal-safety.7.html))
+ *   functions, it may stop the target process or cause unexpected behaviour.
+ * \sa injector_remote_func_addr(), injector_remote_vcall()
+ */
+int injector_remote_call(injector_t *injector, intptr_t *retval, size_t func_addr, ...);
+
+/*!
+ * \brief Call the function in the target process (Linux only)
+ * \param[in]   injector  the injector handle specifying the target process
+ * \param[out]  retval    \c NULL or the address where the return value of the function call will be stored
+ * \param[in]   func_addr the function address in the target process
+ * \param[in]   ap        arguments passed to the function
+ * \return                zero on success. Otherwise, error code
+ * \remarks
+ *   The types of the arguments must be integer or pointer.
+ *   If it is a pointer, it must point to a valid address in the target process.
+ *   The number of arguments must be less than or equal to six.
+ * \note
+ *   If the function in the target process internally calls non-[async-signal-safe]((https://man7.org/linux/man-pages/man7/signal-safety.7.html))
+ *   functions, it may stop the target process or cause unexpected behaviour.
+ * \sa injector_remote_func_addr(), injector_remote_call()
+ */
+int injector_remote_vcall(injector_t *injector, intptr_t *retval, size_t func_addr, va_list ap);
+#endif
+
 #if defined(INJECTOR_DOC) || defined(_WIN32)
 /*!
- * \brief Same with \c injector_inject except the type of the \c path argument. (only Windows)
+ * \brief Same with \c injector_inject except the type of the \c path argument. (Windows only)
  * \param[in]   injector the injector handle specifying the target process
  * \param[in]   path     the path name of the shared library
  * \param[out]  handle   the address where the newly created module handle will be stored
@@ -144,7 +217,7 @@ int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle);
 #if defined(INJECTOR_DOC) || (defined(__linux__) && defined(__x86_64__))
 #define INJECTOR_HAS_INJECT_IN_CLONED_THREAD 1 // feature test macro
 /*!
- * \brief Inject the specified shared library into the target process by the \c clone system call. (only Linux x86_64)
+ * \brief Inject the specified shared library into the target process by the \c clone system call. (Linux x86_64 only)
  * \param[in]   injector the injector handle specifying the target process
  * \param[in]   path     the path name of the shared library
  * \param[out]  handle   the address where the newly created module handle will be stored

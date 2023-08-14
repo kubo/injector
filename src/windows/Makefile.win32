@@ -2,7 +2,7 @@
 CFLAGS = -nologo -O2 -I../../include
 
 RTFLAG = -MD  # link with dynamic runtime library
-# RTFLAG = /MT  # link with static runtime library
+# RTFLAG = -MT  # link with static runtime library
 
 RELEASE_DLL = injector.dll
 DEBUG_DLL = injectord.dll

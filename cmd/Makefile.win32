@@ -1,5 +1,9 @@
 # -*- Makefile -*-
-CFLAGS = -nologo -MD -I../include
+
+RTFLAG = -MD  # link with dynamic runtime library
+# RTFLAG = -MT  # link with static runtime library
+
+CFLAGS = -nologo $(RTFLAG) -I../include
 
 OBJS = main.obj ya_getopt.obj
 INJECTOR_LIB = ..\src\windows\injector-static.lib

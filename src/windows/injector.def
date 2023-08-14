@@ -4,3 +4,6 @@ EXPORTS
     injector_detach
     injector_error
     injector_inject_w
+    injector_remote_func_addr
+    injector_remote_call
+    injector_remote_vcall

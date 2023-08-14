@@ -1,8 +1,12 @@
 #define INCR_ON_INJECTION 13
 #define INCR_ON_UNINJECTION 17
 
+#include <stdint.h>
+
 #ifdef _WIN32
 #include <windows.h>
+
+intptr_t __declspec(dllexport) sum_integers(intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5, intptr_t a6);
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 {
@@ -56,3 +60,8 @@ void fini()
     exit_value += INCR_ON_UNINJECTION;
 }
 #endif
+
+intptr_t sum_integers(intptr_t a1, intptr_t a2, intptr_t a3, intptr_t a4, intptr_t a5, intptr_t a6)
+{
+    return a1 + a2 + a3 + a4 + a5 + a6;
+}

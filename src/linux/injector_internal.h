@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -159,8 +159,9 @@ int injector__write(const injector_t *injector, size_t addr, const void *buf, si
 int injector__continue(const injector_t *injector);
 
 /* remote_call.c - call functions and syscalls in the target process */
-int injector__call_syscall(const injector_t *injector, long *retval, long syscall_number, ...);
-int injector__call_function(const injector_t *injector, long *retval, long function_addr, ...);
+int injector__call_syscall(const injector_t *injector, intptr_t *retval, long syscall_number, ...);
+int injector__call_function(const injector_t *injector, intptr_t *retval, long function_addr, ...);
+int injector__call_function_va_list(const injector_t *injector, intptr_t *retval, long function_addr, va_list ap);
 
 /* util.c */
 extern char injector__errmsg[];

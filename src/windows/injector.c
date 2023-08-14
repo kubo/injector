@@ -6,7 +6,7 @@
  *
  * ------------------------------------------------------
  *
- * Copyright (C) 2018-2020 Kubo Takehiro <kubo@jiubao.org>
+ * Copyright (C) 2018-2023 Kubo Takehiro <kubo@jiubao.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -47,187 +47,129 @@ static DWORD page_size = 0;
 static size_t func_LoadLibraryW;
 static size_t func_FreeLibrary;
 static size_t func_GetLastError;
+static size_t func_GetProcAddress;
 static char errmsg[512];
 
-// extern HMODULE load_address;
-// DWORD load_library(const wchar_t *path)
+typedef struct {
+    uint64_t func;
+    uint64_t arg1;
+    uint64_t arg2;
+    uint64_t arg3;
+    uint64_t arg4;
+    uint64_t arg5;
+    uint64_t arg6;
+} remote_call_args_t;
+
+// size_t remote_call(remote_call_args_t *args)
 // {
-//    HMODULE hMod = LoadLibraryW(path);
-//    if (hMod != NULL) {
-//        load_address = hMod;
-//        return 0;
-//    } else {
-//        return GetLastError();
-//    }
-// }
-// DWORD unload_library(HMODULE handle)
-// {
-//    if (FreeLibrary(handle)) {
-//        return 0;
-//    } else {
-//        return GetLastError();
-//    }
+//    size_t rv = args->func(args->arg1, args->arg2, args->arg3, args->arg4, args->arg5, args->arg6);
+//    *(DWORD*)args = GetLastError();
+//    return rv;
 // }
 #ifdef _M_AMD64
 static const char x64_code_template[] =
-    // ---------- call LoadLibraryW ----------
-    /* 0000:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0004:     */ "\xFF\x15\x3E\x00\x00\x00"     // call LoadLibraryW
-    //                       ^^^^^^^^^^^^^^^^0x0000003e = X64_ADDR_LoadLibraryW - (0x0004 + 6)
-    /* 000A:     */ "\x48\x85\xC0"                 // test rax,rax
-    /* 000D:     */ "\x74\x0B"                     // je   L1
-    /* 000F:     */ "\x48\x89\x05\xEA\x0F\x00\x00" // mov  [load_address], rax
-    //                           ^^^^^^^^^^^^^^^^0x00000fea = 0x1000 - (0x000F + 7)
-    /* 0016:     */ "\x33\xC0"                     // xor  eax,eax
-    /* 0018:     */ "\xEB\x06"                     // jmp  L2
-    /* 001A: L1: */ "\xFF\x15\x38\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x00000038 = X64_ADDR_GetLastError - (0x001A + 6)
-    /* 0020: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
-    /* 0024:     */ "\xC3"                         // ret
 
-    // ---------- call FreeLibrary ----------
-#define X64_UNINJECTION_CODE_OFFSET 0x25
-    /* 0025:     */ "\x48\x83\xEC\x28"             // sub  rsp,28h
-    /* 0029:     */ "\xFF\x15\x21\x00\x00\x00"     // call FreeLibrary
-    //                       ^^^^^^^^^^^^^^^^0x00000021 = X64_ADDR_FreeLibrary - (0x0029 + 6)
-    /* 002F:     */ "\x85\xC0"                     // test eax,eax
-    /* 0031:     */ "\x74\x04"                     // je   L1
-    /* 0033:     */ "\x33\xC0"                     // xor  eax,eax
-    /* 0035:     */ "\xEB\x06"                     // jmp  L2
-    /* 0037: L1: */ "\xFF\x15\x1B\x00\x00\x00"     // call GetLastError
-    //                       ^^^^^^^^^^^^^^^^0x0000001B = X64_ADDR_GetLastError - (0x0037 + 6)
-    /* 003D: L2: */ "\x48\x83\xC4\x28"             // add  rsp,28h
-    /* 0041:     */ "\xC3"                         // ret
-
-    // padding
-    /* 0042:     */ "\x90\x90\x90\x90\x90\x90"
-
-    // ---------- literal pool ----------
-#define X64_ADDR_LoadLibraryW  0x0048
-    /* 0048:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define X64_ADDR_FreeLibrary   0x0050
-    /* 0050:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
-#define X64_ADDR_GetLastError  0x0058
-    /* 0058:     */ "\x90\x90\x90\x90\x90\x90\x90\x90"
+    /* 0000: */ "\x40\x53"                 // push rbx
+    /* 0002: */ "\x48\x8B\xD9"             // mov  rbx,rcx   ; preserve the first argument
+    /* 0005: */ "\x48\x83\xEC\x30"         // sub  rsp,30h   ; align the stack pointer
+    /* 0009: */ "\x48\x8B\x41\x30"         // mov  rax,qword ptr [rcx+30h] ; set the 6th argument
+    /* 000D: */ "\x48\x89\x44\x24\x28"     // mov  qword ptr [rsp+28h],rax ;   ditto
+    /* 0012: */ "\x48\x8B\x41\x28"         // mov  rax,qword ptr [rcx+28h] ; set the 5th argument
+    /* 0016: */ "\x48\x89\x44\x24\x20"     // mov  qword ptr [rsp+20h],rax ;   ditto
+    /* 001B: */ "\x4C\x8B\x49\x20"         // mov  r9,qword ptr [rcx+20h]  ; set the 4th argument
+    /* 001F: */ "\x4C\x8B\x41\x18"         // mov  r8,qword ptr [rcx+18h]  ; set the 3rd argument
+    /* 0023: */ "\x48\x8B\x51\x10"         // mov  rdx,qword ptr [rcx+10h] ; set the 2nd argument
+    /* 0027: */ "\x48\x8B\x49\x08"         // mov  rcx,qword ptr [rcx+8]   ; set the 1st argument
+    /* 002B: */ "\xFF\x13"                 // call qword ptr [rbx]         ; call func
+    /* 002D: */ "\x48\x89\x03"             // mov  qword ptr [rbx],rax     ; store the return value
+    /* 0030: */ "\xFF\x15\x0A\x00\x00\x00" // call GetLastError
+    /* 0036: */ "\x48\x83\xC4\x30"         // add  rsp,30h
+    /* 003A: */ "\x5B"                     // pop  rbx
+    /* 003B: */ "\xC3"                     // ret
+    /* 003C: */ "\x90\x90\x90\x90"         // nop; nop; nop; nop
+#define X64_ADDR_GetLastError  0x0040
+    /* 0040: */ "\x90\x90\x90\x90\x90\x90\x90\x90"
     ;
-
-#define X64_CODE_SIZE          0x0060
+#define X64_CODE_SIZE          0x0048
 #endif
 
 #ifdef _M_ARM64
-static const unsigned int arm64_code_template[] = {
-    // ---------- call LoadLibraryW ----------
-    /* 0000:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0004:     */ 0x580002A9, //  ldr   x9,$ARM64_ADDR_LoadLibraryW
-    /* 0008:     */ 0xD63F0120, //  blr   x9
-    /* 000C:     */ 0xB40000A0, //  cbz   x0,$L1
-    /* 0010:     */ 0xB0000001, //  adrp  x1, #0x1000
-    /* 0014:     */ 0xF9000020, //  str   x0, [x1]
-    /* 0018:     */ 0x52800000, //  mov   w0,#0
-    /* 001C:     */ 0x14000003, //  b     $L2
-    /* 0020: L1: */ 0x58000249, //  ldr   x9,$ARM64_ADDR_GetLastError
-    /* 0024:     */ 0xD63F0120, //  blr   x9
-    /* 0028: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
-    /* 002C:     */ 0xD65F03C0, //  ret
-
-    // ---------- call FreeLibrary ----------
-#define ARM64_UNINJECTION_CODE_OFFSET 0x0030
-    /* 0030:     */ 0xF81F0FFE, //  str   lr,[sp,#-0x10]!
-    /* 0034:     */ 0x58000169, //  ldr   x9,$ARM64_ADDR_FreeLibrary
-    /* 0038:     */ 0xD63F0120, //  blr   x9
-    /* 003C:     */ 0xB4000060, //  cbz   x0,$L1
-    /* 0040:     */ 0x52800000, //  mov   w0,#0
-    /* 0044:     */ 0x14000003, //  b     $L2
-    /* 0048: L1: */ 0x58000109, //  ldr   x9,$ARM64_ADDR_GetLastError
-    /* 004C:     */ 0xD63F0120, //  blr   x9
-    /* 0050: L2: */ 0xF84107FE, //  ldr   lr,[sp],#0x10
-    /* 0054:     */ 0xD65F03C0, //  ret
-
-    // ---------- literal pool ----------
-#define ARM64_ADDR_LoadLibraryW    0x0058
-    /* 0058:     */ 0, 0,
-#define ARM64_ADDR_FreeLibrary     0x0060
-    /* 0060:     */ 0, 0,
-#define ARM64_ADDR_GetLastError    0x0068
-    /* 0068:     */ 0, 0
+static const uint32_t arm64_code_template[] = {
+    /* 0000: */ 0xa9be7bfd, // stp x29, x30, [sp, #-32]! ; prolog
+    /* 0004: */ 0x910003fd, // mov x29, sp               ; ditto
+    /* 0008: */ 0xf9000bf3, // str x19, [sp, #16]        ; reserve x19
+    /* 000c: */ 0xaa0003f3, // mov x19, x0               ; set args to x19
+    /* 0010: */ 0xa9429664, // ldp x4, x5, [x19, #40]    ; set 5th and 6th arguments
+    /* 0014: */ 0xa9418e62, // ldp x2, x3, [x19, #24]    ; set 3rd and 4th arguments
+    /* 0018: */ 0xa9408660, // ldp x0, x1, [x19, #8]     ; set 1st and 2nd arguments
+    /* 001c: */ 0xf9400269, // ldr x9, [x19]             ; get args->func
+    /* 0020: */ 0xd63f0120, // blr x9                    ; call args->func
+    /* 0024: */ 0xf9000260, // str x0, [x19]             ; set the return value
+    /* 0028: */ 0xf9400bf3, // ldr x19, [sp, #16]        ; restore x19
+    /* 002c: */ 0xa8c27bfd, // ldp x29, x30, [sp], #32   ; epilog
+    /* 0030: */ 0x58000049, // ldr x9, ARM64_ADDR_GetLastError
+    /* 0034: */ 0xd61f0120, // br  x9
+#define ARM64_ADDR_GetLastError    0x0038
+    /* 0038: */ 0,
+    /* 003c: */ 0,
 };
-#define ARM64_CODE_SIZE          0x0070
+#define ARM64_CODE_SIZE          0x0040
 #endif
 
 #if defined(_M_ARM64) || defined(_M_ARMT)
 static const uint16_t armt_code_template[] = {
-    // ---------- call LoadLibraryW ----------
-    /* 0000:     */ 0xb508,         // push  {r3, lr}
-    /* 0002:     */ 0x4b08,         // ldr   r3, [pc, #32] ; ARMT_ADDR_LoadLibraryW
-    /* 0004:     */ 0x4798,         // blx   r3
-    /* 0006:     */ 0xb150,         // cbz   r0, L1
-    /* 0008:     */ 0x467b,         // mov   r3, pc
-    /* 000a:     */ 0xf8c3, 0x0ff4, // str.w r0, [r3, #4084] ; load_address
-    /* 000e:     */ 0x2000,         // movs  r0, #0
-    /* 0010:     */ 0xbd08,         // pop   {r3, pc}
-
-    // ---------- call FreeLibrary ----------
-#define ARMT_UNINJECTION_CODE_OFFSET 0x0012
-
-    /* 0012:     */ 0xb508,         // push  {r3, lr}
-    /* 0014:     */ 0x4b04,         // ldr   r3, [pc, #16] ; ARMT_ADDR_FreeLibrary
-    /* 0016:     */ 0x4798,         // blx   r3
-    /* 0018:     */ 0xb108,         // cbz   r0, L1
-    /* 001a:     */ 0x2000,         // movs  r0, #0
-    /* 001c:     */ 0xbd08,         // pop   {r3, pc}
-
-    // ---------- call GetLastError ----------
-    /* 001e: L1: */ 0x4b03,         // ldr   r3, [pc, #12] ; ARMT_ADDR_GetLastError
-    /* 0020:     */ 0x4798,         // blx   r3
-    /* 0022:     */ 0xbd08,         // pop   {r3, pc}
-
-    // ---------- literal pool ----------
-#define ARMT_ADDR_LoadLibraryW    0x0024
-    /* 0024:     */ 0, 0,           // .word
-#define ARMT_ADDR_FreeLibrary     0x0028
-    /* 0028:     */ 0, 0,           // .word
-#define ARMT_ADDR_GetLastError    0x002c
-    /* 002c:     */ 0, 0,           // .word
+    /* 0000: */ 0xb530, // push {r4, r5, lr}   ; prolog
+    /* 0002: */ 0xb083, // sub  sp, #12        ; reserve stack for arguments
+    /* 0004: */ 0x0004, // movs r4, r0
+    /* 0006: */ 0x6b25, // ldr  r5, [r4, #48]  ; set the 6th argument
+    /* 0008: */ 0x9501, // str  r5, [sp, #4]   ;   ditto
+    /* 000a: */ 0x6aa5, // ldr  r5, [r4, #40]  ; set the 5th argument
+    /* 000c: */ 0x9500, // str  r5, [sp, #0]   ;   ditto
+    /* 000e: */ 0x6a23, // ldr  r3, [r4, #32]  ; set the 4th argument
+    /* 0010: */ 0x69a2, // ldr  r2, [r4, #24]  ; set the 3rd argument
+    /* 0012: */ 0x6921, // ldr  r1, [r4, #16]   ; set the 2nd argument
+    /* 0014: */ 0x68a0, // ldr  r0, [r4, #8]   ; set the 1st argument
+    /* 0016: */ 0x6825, // ldr  r5, [r4, #0]   ; get args->func
+    /* 0018: */ 0x47a8, // blx  r5             ; call args->func
+    /* 001a: */ 0x6020, // str  r0, [r4, #0]   ; set the return value
+    /* 001c: */ 0x4d01, // ldr  r5, [pc, #4]   ; get the address of GetLastError (0x0024)
+    /* 001e: */ 0x47a8, // blx  r5             ; call GetLastError
+    /* 0020: */ 0xb003, // add  sp, #12        ; restore stack
+    /* 0022: */ 0xbd30, // pop  {r4, r5, pc}   ; epilog
+#define ARMT_ADDR_GetLastError    0x0024
+    /* 0024: */ 0,      // .word
+    /* 0026: */ 0,      // .word
 };
-#define ARMT_CODE_SIZE          0x0030
+#define ARMT_CODE_SIZE          0x0028
 #endif
 
 #if defined(_M_AMD64) || defined(_M_IX86)
 static const char x86_code_template[] =
-    // ---------- call LoadLibraryW ----------
-    /* 0000:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define X86_CALL_LoadLibraryW    0x0004
-    /* 0004:     */ "\xE8\x00\x00\x00\x00"      // call LoadLibraryW@4
-    /* 0009:     */ "\x85\xC0"                  // test eax,eax
-    /* 000B:     */ "\x74\x09"                  // je   L1
-#define X86_MOV_EAX  0x000D
-    /* 000D:     */ "\xA3\x00\x00\x00\x00"      // mov  dword ptr [load_address], eax
-    /* 0012:     */ "\x33\xC0"                  // xor  eax,eax
-    /* 0014:     */ "\xEB\x05"                  // jmp  L2
-#define X86_CALL_GetLastError1   0x0016
-    /* 0016: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
-    /* 001B: L2: */ "\xC2\x04\x00"              // ret  4
-
-    // ---------- call FreeLibrary ----------
-#define X86_UNINJECTION_CODE_OFFSET 0x001E
-    /* 001E:     */ "\xFF\x74\x24\x04"          // push dword ptr [esp+4]
-#define X86_CALL_FreeLibrary     0x0022
-    /* 0022:     */ "\xE8\x00\x00\x00\x00"      // call FreeLibrary@4
-    /* 0027:     */ "\x85\xC0"                  // test eax,eax
-    /* 0029:     */ "\x74\x04"                  // je   L1
-    /* 002B:     */ "\x33\xC0"                  // xor  eax,eax
-    /* 002D:     */ "\xEB\x05"                  // jmp  L2
-#define X86_CALL_GetLastError2   0x002F
-    /* 002F: L1: */ "\xE8\x00\x00\x00\x00"      // call GetLastError@0
-    /* 0034: L2: */ "\xC2\x04\x00"              // ret  4
+    /* 0000: */ "\x55"                 // push ebp
+    /* 0001: */ "\x8B\xEC"             // mov  ebp,esp
+    /* 0003: */ "\x53"                 // push ebx
+    /* 0004: */ "\x8B\x5D\x08"         // mov  ebx,dword ptr [ebp+8] ; get args
+    /* 0007: */ "\xFF\x73\x30"         // push dword ptr [ebx+30h]   ; set the 6th argument
+    /* 000A: */ "\xFF\x73\x28"         // push dword ptr [ebx+28h]   ; set the 5th argument
+    /* 000D: */ "\xFF\x73\x20"         // push dword ptr [ebx+20h]   ; set the 4th argument
+    /* 0010: */ "\xFF\x73\x18"         // push dword ptr [ebx+18h]   ; set the 3rd argument
+    /* 0013: */ "\xFF\x73\x10"         // push dword ptr [ebx+10h]     ; set the 2nd argument
+    /* 0016: */ "\xFF\x73\x08"         // push dword ptr [ebx+8]     ; set the 1st argument
+    /* 0019: */ "\xFF\x13"             // call dword ptr [ebx]       ; call args->func
+    /* 001B: */ "\x89\x03"             // mov  dword ptr [ebx],eax   ; store the return value
+#define X86_CALL_GetLastError   0x001D
+    /* 001D: */ "\xE8\x00\x00\x00\x00" // call GetLastError
+    /* 0022: */ "\x8B\x5D\xF8"         // mov  ebx,dword ptr [ebp-8]
+    /* 0025: */ "\xC9"                 // leave
+    /* 0026: */ "\xC2\x04\x00"         // ret  4
     ;
 
-#define X86_CODE_SIZE          0x0037
+#define X86_CODE_SIZE          0x0029
 #endif
 
 #ifdef _M_AMD64
 #define CURRENT_ARCH "x64"
-#define CODE_SIZE X64_CODE_SIZE
+#define CODE_SIZE __max(X64_CODE_SIZE, X86_CODE_SIZE)
 #endif
 #ifdef _M_ARM64
 #define CURRENT_ARCH "arm64"
@@ -249,9 +191,13 @@ static const char *arch_name(USHORT arch);
 
 struct injector {
     HANDLE hProcess;
-    char *remote_mem;
-    char *injection_code;
-    char *uninjection_code;
+    USHORT arch;
+    char *code;
+    char *data;
+    size_t load_library;
+    size_t free_library;
+    size_t get_last_error;
+    size_t get_proc_address;
 };
 
 static BOOL init(void)
@@ -266,6 +212,7 @@ static BOOL init(void)
     page_size = si.dwPageSize;
     func_LoadLibraryW = (size_t)GetProcAddress(kernel32, "LoadLibraryW");
     func_FreeLibrary = (size_t)GetProcAddress(kernel32, "FreeLibrary");
+    func_GetProcAddress = (size_t)GetProcAddress(kernel32, "GetProcAddress");
     func_GetLastError = (size_t)GetProcAddress(kernel32, "GetLastError");
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &hToken)) {
@@ -299,7 +246,7 @@ static DWORD name_index(IMAGE_NT_HEADERS *nt_hdrs, void *base, const DWORD *name
     return (DWORD)-1;
 }
 
-static int funcaddr(DWORD pid, size_t *load_library, size_t *free_library, size_t *get_last_error)
+static int funcaddr(DWORD pid, injector_t *injector)
 {
     HANDLE hSnapshot;
     MODULEENTRY32W me;
@@ -399,21 +346,28 @@ retry:
     if (idx == (DWORD)-1) {
         goto exit;
     }
-    *load_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
+    injector->load_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
 
     /* Find the address of FreeLibrary */
     idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "FreeLibrary");
     if (idx == (DWORD)-1) {
         goto exit;
     }
-    *free_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
+    injector->free_library = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
+
+    /* Find the address of GetProcAddress */
+    idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "GetProcAddress");
+    if (idx == (DWORD)-1) {
+        goto exit;
+    }
+    injector->get_proc_address = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
 
     /* Find the address of GetLastError */
     idx = name_index(nt_hdrs, base, names, exp->NumberOfNames, "GetLastError");
     if (idx == (DWORD)-1) {
         goto exit;
     }
-    *get_last_error = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
+    injector->get_last_error = (size_t)me.modBaseAddr + funcs[ordinals[idx]];
     rv = 0;
 exit:
     if (base != NULL) {
@@ -429,6 +383,58 @@ exit:
 }
 #endif
 
+static int remote_call(injector_t *injector, remote_call_args_t *args, size_t size, intptr_t *retval, DWORD *last_error)
+{
+    char *code = injector->code;
+    HANDLE hThread;
+    size_t sz;
+
+#if defined(_M_ARM64) || defined(_M_ARMT)
+    if (injector->arch == IMAGE_FILE_MACHINE_ARMNT) {
+        ++code;
+    }
+#endif
+    if (!WriteProcessMemory(injector->hProcess, injector->data, args, size, &sz)) {
+        set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
+        return INJERR_OTHER;
+    }
+    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)code, injector->data, 0, NULL);
+    if (hThread == NULL) {
+        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
+        return INJERR_OTHER;
+    }
+    WaitForSingleObject(hThread, INFINITE);
+    if (last_error) {
+        GetExitCodeThread(hThread, last_error);
+    }
+    CloseHandle(hThread);
+    if (retval) {
+        union {
+            size_t s;
+            uint32_t u32;
+        } val;
+        size_t valsize = sizeof(size_t);
+#ifdef _WIN64
+        switch (injector->arch) {
+          case IMAGE_FILE_MACHINE_ARMNT:
+          case IMAGE_FILE_MACHINE_I386:
+              valsize = 4;
+              break;
+        }
+#endif
+        if (!ReadProcessMemory(injector->hProcess, injector->data, &val, valsize, &sz)) {
+            set_errmsg("ReadProcessMemory error: %s", w32strerr(GetLastError()));
+            return INJERR_OTHER;
+        }
+        if (valsize == 4) {
+            *retval = val.u32;
+        } else {
+            *retval = val.s;
+        }
+    }
+    return 0;
+}
+
 int injector_attach(injector_t **injector_out, DWORD pid)
 {
     injector_t *injector;
@@ -438,21 +444,15 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         PROCESS_VM_OPERATION  |  /* for VirtualAllocEx() */
         PROCESS_VM_READ       |  /* for ReadProcessMemory() */
         PROCESS_VM_WRITE;        /* for WriteProcessMemory() */
-    USHORT arch;
     DWORD old_protect;
     SIZE_T written;
     int rv;
     char code[CODE_SIZE];
     size_t code_size;
-    size_t load_library, free_library, get_last_error;
 
     if (page_size == 0) {
         init();
     }
-
-    load_library = func_LoadLibraryW;
-    free_library = func_FreeLibrary;
-    get_last_error = func_GetLastError;
 
     injector = calloc(1, sizeof(injector_t));
     if (injector == NULL) {
@@ -475,14 +475,18 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         }
         goto error_exit;
     }
+    injector->load_library = func_LoadLibraryW;
+    injector->free_library = func_FreeLibrary;
+    injector->get_last_error = func_GetLastError;
+    injector->get_proc_address = func_GetProcAddress;
 
-    arch = process_arch(injector->hProcess);
-    switch (arch) {
+    injector->arch = process_arch(injector->hProcess);
+    switch (injector->arch) {
 #ifdef _M_AMD64
     case IMAGE_FILE_MACHINE_AMD64:
         break;
     case IMAGE_FILE_MACHINE_I386:
-        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
+        rv = funcaddr(pid, injector);
         if (rv != 0) {
             goto error_exit;
         }
@@ -492,7 +496,7 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     case IMAGE_FILE_MACHINE_ARM64:
         break;
     case IMAGE_FILE_MACHINE_ARMNT:
-        rv = funcaddr(pid, &load_library, &free_library, &get_last_error);
+        rv = funcaddr(pid, injector);
         if (rv != 0) {
             goto error_exit;
         }
@@ -508,78 +512,62 @@ int injector_attach(injector_t **injector_out, DWORD pid)
 #endif
     default:
         set_errmsg("%s target process isn't supported by %s process.",
-                   arch_name(arch), CURRENT_ARCH);
+                   arch_name(injector->arch), CURRENT_ARCH);
         rv = INJERR_UNSUPPORTED_TARGET;
         goto error_exit;
     }
 
-    injector->remote_mem = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
-                                          MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (injector->remote_mem == NULL) {
+    injector->code = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
+                                          MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READ);
+    if (injector->code == NULL) {
         set_errmsg("VirtualAllocEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
     }
-
-    injector->injection_code = injector->remote_mem;
-    switch (arch) {
+    injector->data = injector->code + page_size;
+    switch (injector->arch) {
 #ifdef _M_AMD64
     case IMAGE_FILE_MACHINE_AMD64: /* x64 */
         memcpy(code, x64_code_template, X64_CODE_SIZE);
         code_size = X64_CODE_SIZE;
-        *(size_t*)(code + X64_ADDR_LoadLibraryW) = load_library;
-        *(size_t*)(code + X64_ADDR_FreeLibrary) = free_library;
-        *(size_t*)(code + X64_ADDR_GetLastError) = get_last_error;
-        injector->uninjection_code = injector->remote_mem + X64_UNINJECTION_CODE_OFFSET;
+        *(size_t*)(code + X64_ADDR_GetLastError) = injector->get_last_error;
         break;
 #endif
 #ifdef _M_ARM64
     case IMAGE_FILE_MACHINE_ARM64: /* arm64 */
         memcpy(code, arm64_code_template, ARM64_CODE_SIZE);
         code_size = ARM64_CODE_SIZE;
-        *(size_t*)(code + ARM64_ADDR_LoadLibraryW) = load_library;
-        *(size_t*)(code + ARM64_ADDR_FreeLibrary) = free_library;
-        *(size_t*)(code + ARM64_ADDR_GetLastError) = get_last_error;
-        injector->uninjection_code = injector->remote_mem + ARM64_UNINJECTION_CODE_OFFSET;
+        *(size_t*)(code + ARM64_ADDR_GetLastError) = injector->get_last_error;
         break;
 #endif
 #if defined(_M_ARM64) || defined(_M_ARMT)
     case IMAGE_FILE_MACHINE_ARMNT: /* arm (thumb mode) */
         memcpy(code, armt_code_template, ARMT_CODE_SIZE);
         code_size = ARMT_CODE_SIZE;
-        *(size_t*)(code + ARMT_ADDR_LoadLibraryW) = load_library;
-        *(size_t*)(code + ARMT_ADDR_FreeLibrary) = free_library;
-        *(size_t*)(code + ARMT_ADDR_GetLastError) = get_last_error;
-        injector->injection_code = injector->remote_mem + 1;
-        injector->uninjection_code = injector->remote_mem + ARMT_UNINJECTION_CODE_OFFSET + 1;
+        *(uint32_t*)(code + ARMT_ADDR_GetLastError) = (uint32_t)injector->get_last_error;
         break;
 #endif
 #if defined(_M_AMD64) || defined(_M_IX86)
     case IMAGE_FILE_MACHINE_I386: /* x86 */
         memcpy(code, x86_code_template, X86_CODE_SIZE);
         code_size = X86_CODE_SIZE;
-#define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->remote_mem + offset + 5)
-        FIX_CALL_RELATIVE(load_library, X86_CALL_LoadLibraryW);
-        FIX_CALL_RELATIVE(free_library, X86_CALL_FreeLibrary);
-        FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError1);
-        FIX_CALL_RELATIVE(get_last_error, X86_CALL_GetLastError2);
-        *(uint32_t*)(code + X86_MOV_EAX + 1) = (uint32_t)(size_t)injector->remote_mem + page_size;
-        injector->uninjection_code = injector->remote_mem + X86_UNINJECTION_CODE_OFFSET;
+#define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->code + offset + 5)
+        FIX_CALL_RELATIVE(injector->get_last_error, X86_CALL_GetLastError);
         break;
 #endif
     default:
-        set_errmsg("Never reach here: arch=0x%x", arch);
+        set_errmsg("Never reach here: arch=0x%x", injector->arch);
         rv = INJERR_OTHER;
         goto error_exit;
     }
 
-    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem, code, code_size, &written)) {
+    if (!WriteProcessMemory(injector->hProcess, injector->code, code, code_size, &written)) {
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
     }
 
-    if (!VirtualProtectEx(injector->hProcess, injector->remote_mem, page_size, PAGE_EXECUTE_READ, &old_protect)) {
+    if (!VirtualProtectEx(injector->hProcess, injector->data, page_size, PAGE_READWRITE, &old_protect)) {
         set_errmsg("VirtualProtectEx error: %s", w32strerr(GetLastError()));
         rv = INJERR_OTHER;
         goto error_exit;
@@ -616,13 +604,13 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
 int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
 {
     struct {
-        void *load_address;
+        remote_call_args_t args;
         wchar_t fullpath[MAX_PATH];
-    } data = {NULL,};
+    } data = {0, };
     DWORD pathlen;
-    SIZE_T written;
-    HANDLE hThread;
-    DWORD err;
+    intptr_t retval;
+    DWORD last_error;
+    int rv;
 
     pathlen = GetFullPathNameW(path, MAX_PATH, data.fullpath, NULL);
     if (pathlen > MAX_PATH) {
@@ -633,56 +621,50 @@ int injector_inject_w(injector_t *injector, const wchar_t *path, void **handle)
         set_errmsg("failed to get the full path: %S", path);
         return INJERR_FILE_NOT_FOUND;
     }
-    if (!WriteProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(data), &written)) {
-        set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
+    data.args.func = injector->load_library;
+    data.args.arg1 = (size_t)injector->data + sizeof(remote_call_args_t);
+
+    rv = remote_call(injector, &data.args, sizeof(data), &retval, &last_error);
+    if (rv != 0) {
+        return rv;
     }
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->injection_code, injector->remote_mem + page_size + sizeof(void*), 0, NULL);
-    if (hThread == NULL) {
-        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
-    WaitForSingleObject(hThread, INFINITE);
-    GetExitCodeThread(hThread, &err);
-    CloseHandle(hThread);
-    if (err != 0) {
-        set_errmsg("LoadLibrary in the target process failed: %s", w32strerr(err));
+    if (retval == 0) {
+        set_errmsg("LoadLibrary in the target process failed: %s", w32strerr(last_error));
         return INJERR_ERROR_IN_TARGET;
     }
-    if (!ReadProcessMemory(injector->hProcess, injector->remote_mem + page_size, &data, sizeof(void *), &written)) {
-        set_errmsg("ReadProcessMemory error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
-    }
     if (handle != NULL) {
-        *handle = data.load_address;
+        *handle = (void*)retval;
     }
     return 0;
 }
 
 int injector_uninject(injector_t *injector, void *handle)
 {
-    HANDLE hThread;
-    DWORD err;
+    remote_call_args_t args;
+    DWORD pathlen;
+    size_t retval;
+    DWORD last_error;
+    int rv;
 
-    hThread = CreateRemoteThread(injector->hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)injector->uninjection_code, handle, 0, NULL);
-    if (hThread == NULL) {
-        set_errmsg("CreateRemoteThread error: %s", w32strerr(GetLastError()));
-        return INJERR_OTHER;
+    args.func = injector->free_library;
+    args.arg1 = (size_t)handle;
+
+    rv = remote_call(injector, &args, sizeof(args), &retval, &last_error);
+    if (rv != 0) {
+        return rv;
     }
-    WaitForSingleObject(hThread, INFINITE);
-    GetExitCodeThread(hThread, &err);
-    CloseHandle(hThread);
-    if (err != 0) {
-        set_errmsg("FreeLibrary in the target process failed: %s", w32strerr(err));
+    if ((BOOL)retval) {
+        return 0;
+    } else {
+        set_errmsg("FreeLibrary in the target process failed: %s", w32strerr(last_error));
         return INJERR_ERROR_IN_TARGET;
     }
-    return 0;
 }
 
 int injector_detach(injector_t *injector)
 {
-    if (injector->remote_mem != NULL) {
-        VirtualFreeEx(injector->hProcess, injector->remote_mem, 0, MEM_RELEASE);
+    if (injector->code != NULL) {
+        VirtualFreeEx(injector->hProcess, injector->code, 0, MEM_RELEASE);
     }
     if (injector->hProcess != NULL) {
         CloseHandle(injector->hProcess);
@@ -694,6 +676,62 @@ int injector_detach(injector_t *injector)
 const char *injector_error(void)
 {
     return errmsg;
+}
+
+int injector_remote_func_addr(injector_t *injector, void *handle, const char* name, size_t *func_addr_out)
+{
+    struct {
+        remote_call_args_t args;
+        char name[512];
+    } data = {0, };
+    intptr_t retval;
+    DWORD last_error;
+    int rv;
+
+    if (strlen(name) >= sizeof(data.name)) {
+        set_errmsg("too long function name: %s", name);
+        return INJERR_FUNCTION_MISSING;
+    }
+
+    data.args.func = injector->get_proc_address;
+    data.args.arg1 = (size_t)handle;
+    data.args.arg2 = (size_t)injector->data + sizeof(remote_call_args_t);
+    strncpy(data.name, name, sizeof(data.name));
+    rv = remote_call(injector, &data.args, sizeof(data), &retval, &last_error);
+    if (rv != 0) {
+        return rv;
+    }
+    if (retval == 0) {
+        set_errmsg("GetProcAddress in the target process failed: %s", w32strerr(last_error));
+        return INJERR_ERROR_IN_TARGET;
+    }
+    *func_addr_out = (size_t)retval;
+    return 0;
+}
+
+int injector_remote_call(injector_t *injector, intptr_t *retval, size_t func_addr, ...)
+{
+    va_list ap;
+    int rv;
+
+    va_start(ap, func_addr);
+    rv = injector_remote_vcall(injector, retval, func_addr, ap);
+    va_end(ap);
+    return rv;
+}
+
+int injector_remote_vcall(injector_t *injector, intptr_t *retval, size_t func_addr, va_list ap)
+{
+    remote_call_args_t args = {0,};
+
+    args.func = func_addr;
+    args.arg1 = va_arg(ap, size_t);
+    args.arg2 = va_arg(ap, size_t);
+    args.arg3 = va_arg(ap, size_t);
+    args.arg4 = va_arg(ap, size_t);
+    args.arg5 = va_arg(ap, size_t);
+    args.arg6 = va_arg(ap, size_t);
+    return remote_call(injector, &args, sizeof(args), retval, NULL);
 }
 
 static void set_errmsg(const char *format, ...)

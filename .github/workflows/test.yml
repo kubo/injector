@@ -8,7 +8,7 @@ jobs:
     name: Tests on Ubuntu (x86_64 and i686)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Install packages
@@ -26,7 +26,7 @@ jobs:
     name: Tests on MacOS (x86_64)
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: run tests
@@ -37,7 +37,7 @@ jobs:
     name: Tests on Windows (x64 and x86)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ilammy/msvc-dev-cmd@v1
@@ -70,7 +70,7 @@ jobs:
     - name: Install packages
       run: |
         apk add gcc musl-dev git make
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: run tests

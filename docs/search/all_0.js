@@ -10,5 +10,8 @@ var searchData=
   ['injector_5finject_5fin_5fcloned_5fthread_7',['injector_inject_in_cloned_thread',['../injector_8h.html#a09dedd933d8349e962dc3103244868b6',1,'injector.h']]],
   ['injector_5finject_5fw_8',['injector_inject_w',['../injector_8h.html#a8eecc5cbcd08ed536c99459d28a3f33a',1,'injector.h']]],
   ['injector_5fpid_5ft_9',['injector_pid_t',['../injector_8h.html#a20e934237a7c4314b93c27e28549e6fe',1,'injector.h']]],
-  ['injector_5funinject_10',['injector_uninject',['../injector_8h.html#ad56227cc68b58213c19b600c8cb85292',1,'injector.h']]]
+  ['injector_5fremote_5fcall_10',['injector_remote_call',['../injector_8h.html#a3cc5685085ef01460a65072579d3d83e',1,'injector.h']]],
+  ['injector_5fremote_5ffunc_5faddr_11',['injector_remote_func_addr',['../injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80',1,'injector.h']]],
+  ['injector_5fremote_5fvcall_12',['injector_remote_vcall',['../injector_8h.html#a39e3ad36a4a6af4b1986302efaf656eb',1,'injector.h']]],
+  ['injector_5funinject_13',['injector_uninject',['../injector_8h.html#ad56227cc68b58213c19b600c8cb85292',1,'injector.h']]]
 ];

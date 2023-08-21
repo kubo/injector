@@ -77,6 +77,8 @@ $(function() {
 <p>Library for injecting a shared library into a Linux, Windows and macOS process.  
 <a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;sys/types.h&gt;</code><br />
+<code>#include &lt;stdarg.h&gt;</code><br />
+<code>#include &lt;stdint.h&gt;</code><br />
 </div><div class="textblock"><div class="dynheader">
 Include dependency graph for injector.h:</div>
 <div class="dyncontent">
@@ -158,16 +160,25 @@ Functions</h2></td></tr>
 <tr class="memdesc:ad56227cc68b58213c19b600c8cb85292"><td class="mdescLeft">&#160;</td><td class="mdescRight">Uninject the shared library specified by <code>handle</code>.  <a href="injector_8h.html#ad56227cc68b58213c19b600c8cb85292">More...</a><br /></td></tr>
 <tr class="separator:ad56227cc68b58213c19b600c8cb85292"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4c103077af0628cc57671c4e346e48dd"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a4c103077af0628cc57671c4e346e48dd">injector_call</a> (injector_t *injector, void *handle, const char *name)</td></tr>
-<tr class="memdesc:a4c103077af0628cc57671c4e346e48dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Call the specified function taking no arguments in the target process (only Linux and macOS)  <a href="injector_8h.html#a4c103077af0628cc57671c4e346e48dd">More...</a><br /></td></tr>
+<tr class="memdesc:a4c103077af0628cc57671c4e346e48dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Call the specified function taking no arguments in the target process (Linux and macOS only)  <a href="injector_8h.html#a4c103077af0628cc57671c4e346e48dd">More...</a><br /></td></tr>
 <tr class="separator:a4c103077af0628cc57671c4e346e48dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7eacadf1235e4afbccd155d9b4c96ba5"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">injector_error</a> (void)</td></tr>
 <tr class="memdesc:a7eacadf1235e4afbccd155d9b4c96ba5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the message of the last error.  <a href="injector_8h.html#a7eacadf1235e4afbccd155d9b4c96ba5">More...</a><br /></td></tr>
 <tr class="separator:a7eacadf1235e4afbccd155d9b4c96ba5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6f7be6b9ca3e178345dbf38f585dac80"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80">injector_remote_func_addr</a> (injector_t *injector, void *handle, const char *name, size_t *func_addr_out)</td></tr>
+<tr class="memdesc:a6f7be6b9ca3e178345dbf38f585dac80"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the function address in the target process (Linux only)  <a href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80">More...</a><br /></td></tr>
+<tr class="separator:a6f7be6b9ca3e178345dbf38f585dac80"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3cc5685085ef01460a65072579d3d83e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e">injector_remote_call</a> (injector_t *injector, intptr_t *retval, size_t func_addr,...)</td></tr>
+<tr class="memdesc:a3cc5685085ef01460a65072579d3d83e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Call the function in the target process (Linux only)  <a href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e">More...</a><br /></td></tr>
+<tr class="separator:a3cc5685085ef01460a65072579d3d83e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a39e3ad36a4a6af4b1986302efaf656eb"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a39e3ad36a4a6af4b1986302efaf656eb">injector_remote_vcall</a> (injector_t *injector, intptr_t *retval, size_t func_addr, va_list ap)</td></tr>
+<tr class="memdesc:a39e3ad36a4a6af4b1986302efaf656eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Call the function in the target process (Linux only)  <a href="injector_8h.html#a39e3ad36a4a6af4b1986302efaf656eb">More...</a><br /></td></tr>
+<tr class="separator:a39e3ad36a4a6af4b1986302efaf656eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8eecc5cbcd08ed536c99459d28a3f33a"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a8eecc5cbcd08ed536c99459d28a3f33a">injector_inject_w</a> (injector_t *injector, const wchar_t *path, void **handle)</td></tr>
-<tr class="memdesc:a8eecc5cbcd08ed536c99459d28a3f33a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Same with <code>injector_inject</code> except the type of the <code>path</code> argument. (only Windows)  <a href="injector_8h.html#a8eecc5cbcd08ed536c99459d28a3f33a">More...</a><br /></td></tr>
+<tr class="memdesc:a8eecc5cbcd08ed536c99459d28a3f33a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Same with <code>injector_inject</code> except the type of the <code>path</code> argument. (Windows only)  <a href="injector_8h.html#a8eecc5cbcd08ed536c99459d28a3f33a">More...</a><br /></td></tr>
 <tr class="separator:a8eecc5cbcd08ed536c99459d28a3f33a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a09dedd933d8349e962dc3103244868b6"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="injector_8h.html#a09dedd933d8349e962dc3103244868b6">injector_inject_in_cloned_thread</a> (injector_t *injector, const char *path, void **handle)</td></tr>
-<tr class="memdesc:a09dedd933d8349e962dc3103244868b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Inject the specified shared library into the target process by the <code>clone</code> system call. (only Linux x86_64)  <a href="injector_8h.html#a09dedd933d8349e962dc3103244868b6">More...</a><br /></td></tr>
+<tr class="memdesc:a09dedd933d8349e962dc3103244868b6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Inject the specified shared library into the target process by the <code>clone</code> system call. (Linux x86_64 only)  <a href="injector_8h.html#a09dedd933d8349e962dc3103244868b6">More...</a><br /></td></tr>
 <tr class="separator:a09dedd933d8349e962dc3103244868b6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
@@ -243,7 +254,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Call the specified function taking no arguments in the target process (only Linux and macOS) </p>
+<p>Call the specified function taking no arguments in the target process (Linux and macOS only) </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
@@ -253,7 +264,9 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <p>The <code>handle</code> and <code>name</code> arguments are passed to <code>dlsym</code> (<a href="https://man7.org/linux/man-pages/man3/dlvsym.3.html">Linux</a>, <a href="https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/dlsym.3.html">macOS</a>) and then the return value of <code>dlsym</code> is called without arguments in the target process.</p>
-<p>Note on Linux: The function is called inside of the target process interrupted by <code>ptrace()</code>. Calling any function except <a href="https://man7.org/linux/man-pages/man7/signal-safety.7.html">async-signal-safe</a> is unsafe. </p>
+<p>This is same with the combination of <a class="el" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80" title="Get the function address in the target process (Linux only)">injector_remote_func_addr()</a> and <a class="el" href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e" title="Call the function in the target process (Linux only)">injector_remote_call()</a> without extra arguments.</p>
+<dl class="section note"><dt>Note</dt><dd>(Linux only) If the function in the target process internally calls non-<a href="(https://man7.org/linux/man-pages/man7/signal-safety.7.html)">async-signal-safe</a> functions, it may stop the target process or cause unexpected behaviour. </dd></dl>
+<dl class="section see"><dt>See also</dt><dd><a class="el" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80" title="Get the function address in the target process (Linux only)">injector_remote_func_addr()</a>, <a class="el" href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e" title="Call the function in the target process (Linux only)">injector_remote_call()</a>, <a class="el" href="injector_8h.html#a39e3ad36a4a6af4b1986302efaf656eb" title="Call the function in the target process (Linux only)">injector_remote_vcall()</a> </dd></dl>
 
 </div>
 </div>
@@ -383,7 +396,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Inject the specified shared library into the target process by the <code>clone</code> system call. (only Linux x86_64) </p>
+<p>Inject the specified shared library into the target process by the <code>clone</code> system call. (Linux x86_64 only) </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
@@ -429,7 +442,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Same with <code>injector_inject</code> except the type of the <code>path</code> argument. (only Windows) </p>
+<p>Same with <code>injector_inject</code> except the type of the <code>path</code> argument. (Windows only) </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
@@ -439,6 +452,185 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>zero on success. Otherwise, error code </dd></dl>
+
+</div>
+</div>
+<a id="a3cc5685085ef01460a65072579d3d83e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3cc5685085ef01460a65072579d3d83e">&#9670;&nbsp;</a></span>injector_remote_call()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int injector_remote_call </td>
+          <td>(</td>
+          <td class="paramtype">injector_t *&#160;</td>
+          <td class="paramname"><em>injector</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">intptr_t *&#160;</td>
+          <td class="paramname"><em>retval</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>func_addr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>...</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Call the function in the target process (Linux only) </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">retval</td><td><code>NULL</code> or the address where the return value of the function call will be stored </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">func_addr</td><td>the function address in the target process </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">...</td><td>arguments passed to the function </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>zero on success. Otherwise, error code </dd></dl>
+<dl class="section remark"><dt>Remarks</dt><dd>The types of the arguments must be integer or pointer. If it is a pointer, it must point to a valid address in the target process. The number of arguments must be less than or equal to six. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>If the function in the target process internally calls non-<a href="(https://man7.org/linux/man-pages/man7/signal-safety.7.html)">async-signal-safe</a> functions, it may stop the target process or cause unexpected behaviour. </dd></dl>
+<dl class="section see"><dt>See also</dt><dd><a class="el" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80" title="Get the function address in the target process (Linux only)">injector_remote_func_addr()</a>, <a class="el" href="injector_8h.html#a39e3ad36a4a6af4b1986302efaf656eb" title="Call the function in the target process (Linux only)">injector_remote_vcall()</a> </dd></dl>
+
+</div>
+</div>
+<a id="a6f7be6b9ca3e178345dbf38f585dac80"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f7be6b9ca3e178345dbf38f585dac80">&#9670;&nbsp;</a></span>injector_remote_func_addr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int injector_remote_func_addr </td>
+          <td>(</td>
+          <td class="paramtype">injector_t *&#160;</td>
+          <td class="paramname"><em>injector</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>handle</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t *&#160;</td>
+          <td class="paramname"><em>func_addr_out</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Get the function address in the target process (Linux only) </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">handle</td><td>the module handle created by <code>injector_inject</code> or special-handles such as <code>RTLD_DEFAULT</code> </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">name</td><td>the function name </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">func_addr_out</td><td>the address where the function address in the target process will be stored </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>zero on success. Otherwise, error code</dd></dl>
+<p><b>Example</b> </p><div class="fragment"><div class="line"><span class="comment">// Inject libfoo.so and then call foo_func(1, 2, 3) in it.</span></div>
+<div class="line"><span class="keywordtype">void</span> *handle;</div>
+<div class="line"><span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a86644861b6e75616994c22a0b9a038f5">injector_inject</a>(injector, <span class="stringliteral">&quot;libfoo.so&quot;</span>, &amp;handle) != 0) {</div>
+<div class="line">   <span class="keywordflow">return</span>;</div>
+<div class="line">}</div>
+<div class="line"><span class="keywordtype">size_t</span> func_addr;</div>
+<div class="line"><span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80">injector_remote_func_addr</a>(injector, handle, <span class="stringliteral">&quot;foo_func&quot;</span>, &amp;func_addr) != 0) {</div>
+<div class="line">   <span class="keywordflow">return</span>;</div>
+<div class="line">}</div>
+<div class="line"><span class="keywordtype">long</span> retval;</div>
+<div class="line"><span class="keywordflow">if</span> (<a class="code" href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e">injector_remote_call</a>(injector, &amp;retval, func_addr, 1, 2, 3) != 0) {</div>
+<div class="line">   <span class="keywordflow">return</span>;</div>
+<div class="line">}</div>
+<div class="line">printf(<span class="stringliteral">&quot;The return value of foo_func(1, 2, 3) is %ld.\n&quot;</span>, retval);</div>
+<div class="ttc" id="ainjector_8h_html_a3cc5685085ef01460a65072579d3d83e"><div class="ttname"><a href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e">injector_remote_call</a></div><div class="ttdeci">int injector_remote_call(injector_t *injector, intptr_t *retval, size_t func_addr,...)</div><div class="ttdoc">Call the function in the target process (Linux only)</div></div>
+<div class="ttc" id="ainjector_8h_html_a6f7be6b9ca3e178345dbf38f585dac80"><div class="ttname"><a href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80">injector_remote_func_addr</a></div><div class="ttdeci">int injector_remote_func_addr(injector_t *injector, void *handle, const char *name, size_t *func_addr_out)</div><div class="ttdoc">Get the function address in the target process (Linux only)</div></div>
+<div class="ttc" id="ainjector_8h_html_a86644861b6e75616994c22a0b9a038f5"><div class="ttname"><a href="injector_8h.html#a86644861b6e75616994c22a0b9a038f5">injector_inject</a></div><div class="ttdeci">int injector_inject(injector_t *injector, const char *path, void **handle)</div><div class="ttdoc">Inject the specified shared library into the target process.</div></div>
+</div><!-- fragment --> 
+</div>
+</div>
+<a id="a39e3ad36a4a6af4b1986302efaf656eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a39e3ad36a4a6af4b1986302efaf656eb">&#9670;&nbsp;</a></span>injector_remote_vcall()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int injector_remote_vcall </td>
+          <td>(</td>
+          <td class="paramtype">injector_t *&#160;</td>
+          <td class="paramname"><em>injector</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">intptr_t *&#160;</td>
+          <td class="paramname"><em>retval</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>func_addr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">va_list&#160;</td>
+          <td class="paramname"><em>ap</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Call the function in the target process (Linux only) </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">injector</td><td>the injector handle specifying the target process </td></tr>
+    <tr><td class="paramdir">[out]</td><td class="paramname">retval</td><td><code>NULL</code> or the address where the return value of the function call will be stored </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">func_addr</td><td>the function address in the target process </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">ap</td><td>arguments passed to the function </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>zero on success. Otherwise, error code </dd></dl>
+<dl class="section remark"><dt>Remarks</dt><dd>The types of the arguments must be integer or pointer. If it is a pointer, it must point to a valid address in the target process. The number of arguments must be less than or equal to six. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>If the function in the target process internally calls non-<a href="(https://man7.org/linux/man-pages/man7/signal-safety.7.html)">async-signal-safe</a> functions, it may stop the target process or cause unexpected behaviour. </dd></dl>
+<dl class="section see"><dt>See also</dt><dd><a class="el" href="injector_8h.html#a6f7be6b9ca3e178345dbf38f585dac80" title="Get the function address in the target process (Linux only)">injector_remote_func_addr()</a>, <a class="el" href="injector_8h.html#a3cc5685085ef01460a65072579d3d83e" title="Call the function in the target process (Linux only)">injector_remote_call()</a> </dd></dl>
 
 </div>
 </div>

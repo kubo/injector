@@ -35,6 +35,21 @@
 #include <tlhelp32.h>
 #include "injector.h"
 
+#if !defined(WDK_NTDDI_VERSION) || WDK_NTDDI_VERSION < 0x0A00000B
+// Windows SDK version < 10.0.22000.0
+#define ProcessMachineTypeInfo 9
+typedef enum _MACHINE_ATTRIBUTES {
+    UserEnabled    = 0x00000001,
+    KernelEnabled  = 0x00000002,
+    Wow64Container = 0x00000004
+} MACHINE_ATTRIBUTES;
+typedef struct _PROCESS_MACHINE_INFORMATION {
+    USHORT ProcessMachine;
+    USHORT Res0;
+    MACHINE_ATTRIBUTES MachineAttributes;
+} PROCESS_MACHINE_INFORMATION;
+#endif
+
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "dbghelp.lib")
 #if !defined(PSAPI_VERSION) || PSAPI_VERSION == 1
@@ -66,7 +81,6 @@ typedef struct {
 //    *(DWORD*)args = GetLastError();
 //    return rv;
 // }
-#ifdef _M_AMD64
 static const char x64_code_template[] =
 
     /* 0000: */ "\x40\x53"                 // push rbx
@@ -91,9 +105,7 @@ static const char x64_code_template[] =
     /* 0040: */ "\x90\x90\x90\x90\x90\x90\x90\x90"
     ;
 #define X64_CODE_SIZE          0x0048
-#endif
 
-#ifdef _M_ARM64
 static const uint32_t arm64_code_template[] = {
     /* 0000: */ 0xa9be7bfd, // stp x29, x30, [sp, #-32]! ; prolog
     /* 0004: */ 0x910003fd, // mov x29, sp               ; ditto
@@ -114,9 +126,7 @@ static const uint32_t arm64_code_template[] = {
     /* 003c: */ 0,
 };
 #define ARM64_CODE_SIZE          0x0040
-#endif
 
-#if defined(_M_ARM64) || defined(_M_ARMT)
 static const uint16_t armt_code_template[] = {
     /* 0000: */ 0xb530, // push {r4, r5, lr}   ; prolog
     /* 0002: */ 0xb083, // sub  sp, #12        ; reserve stack for arguments
@@ -141,9 +151,7 @@ static const uint16_t armt_code_template[] = {
     /* 0026: */ 0,      // .word
 };
 #define ARMT_CODE_SIZE          0x0028
-#endif
 
-#if defined(_M_AMD64) || defined(_M_IX86)
 static const char x86_code_template[] =
     /* 0000: */ "\x55"                 // push ebp
     /* 0001: */ "\x8B\xEC"             // mov  ebp,esp
@@ -165,24 +173,38 @@ static const char x86_code_template[] =
     ;
 
 #define X86_CODE_SIZE          0x0029
-#endif
 
 #ifdef _M_AMD64
 #define CURRENT_ARCH "x64"
-#define CODE_SIZE __max(X64_CODE_SIZE, X86_CODE_SIZE)
+#define CURRENT_IMAGE_FILE_MACHINE IMAGE_FILE_MACHINE_AMD64
 #endif
 #ifdef _M_ARM64
 #define CURRENT_ARCH "arm64"
-#define CODE_SIZE ARM64_CODE_SIZE
+#define CURRENT_IMAGE_FILE_MACHINE IMAGE_FILE_MACHINE_ARM64
 #endif
 #ifdef _M_ARMT
 #define CURRENT_ARCH "arm"
-#define CODE_SIZE ARMT_CODE_SIZE
+#define CURRENT_IMAGE_FILE_MACHINE IMAGE_FILE_MACHINE_ARMNT
 #endif
 #ifdef _M_IX86
 #define CURRENT_ARCH "x86"
-#define CODE_SIZE X86_CODE_SIZE
+#define CURRENT_IMAGE_FILE_MACHINE IMAGE_FILE_MACHINE_I386
 #endif
+
+#define CODE_SIZE __max(__max(X64_CODE_SIZE, ARM64_CODE_SIZE), __max(X86_CODE_SIZE, ARMT_CODE_SIZE))
+
+static BOOL CallIsWow64Process2(HANDLE hProcess, USHORT *pProcessMachine, USHORT *pNativeMachine)
+{
+    static IsWow64Process2_t IsWow64Process2_func = (IsWow64Process2_t)-1;
+    if (IsWow64Process2_func == (IsWow64Process2_t)-1) {
+        IsWow64Process2_func = (IsWow64Process2_t)GetProcAddress(GetModuleHandleA("kernel32"), "IsWow64Process2");
+    }
+    if (IsWow64Process2_func == NULL) {
+       return FALSE;
+    }
+    return IsWow64Process2_func(hProcess, pProcessMachine, pNativeMachine);
+}
+#define IsWow64Process2 CallIsWow64Process2
 
 static void set_errmsg(const char *format, ...);
 static const char *w32strerr(DWORD err);
@@ -233,7 +255,6 @@ static BOOL init(void)
     return TRUE;
 }
 
-#if defined(_M_AMD64) || defined(_M_ARM64)
 static DWORD name_index(IMAGE_NT_HEADERS *nt_hdrs, void *base, const DWORD *names, DWORD num_names, const char *name)
 {
     DWORD idx;
@@ -295,7 +316,7 @@ retry:
     }
 
     /* Get the export directory in the kernel32.dll. */
-    hFile = CreateFileW(me.szExePath, GENERIC_READ, 0, NULL,
+    hFile = CreateFileW(me.szExePath, GENERIC_READ, FILE_SHARE_READ, NULL,
                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         set_errmsg("failed to open file %s: %s", me.szExePath, w32strerr(GetLastError()));
@@ -381,7 +402,6 @@ exit:
     }
     return rv;
 }
-#endif
 
 static int remote_call(injector_t *injector, remote_call_args_t *args, size_t size, intptr_t *retval, DWORD *last_error)
 {
@@ -389,11 +409,9 @@ static int remote_call(injector_t *injector, remote_call_args_t *args, size_t si
     HANDLE hThread;
     size_t sz;
 
-#if defined(_M_ARM64) || defined(_M_ARMT)
     if (injector->arch == IMAGE_FILE_MACHINE_ARMNT) {
         ++code;
     }
-#endif
     if (!WriteProcessMemory(injector->hProcess, injector->data, args, size, &sz)) {
         set_errmsg("WriteProcessMemory error: %s", w32strerr(GetLastError()));
         return INJERR_OTHER;
@@ -414,14 +432,12 @@ static int remote_call(injector_t *injector, remote_call_args_t *args, size_t si
             uint32_t u32;
         } val;
         size_t valsize = sizeof(size_t);
-#ifdef _WIN64
         switch (injector->arch) {
           case IMAGE_FILE_MACHINE_ARMNT:
           case IMAGE_FILE_MACHINE_I386:
               valsize = 4;
               break;
         }
-#endif
         if (!ReadProcessMemory(injector->hProcess, injector->data, &val, valsize, &sz)) {
             set_errmsg("ReadProcessMemory error: %s", w32strerr(GetLastError()));
             return INJERR_OTHER;
@@ -482,32 +498,35 @@ int injector_attach(injector_t **injector_out, DWORD pid)
 
     injector->arch = process_arch(injector->hProcess);
     switch (injector->arch) {
-#ifdef _M_AMD64
+#if defined(_M_ARM64) // arm64
+    case IMAGE_FILE_MACHINE_ARM64:
+    case IMAGE_FILE_MACHINE_ARMNT:
+        break;
+#endif
+#if defined(_M_AMD64) // x64
     case IMAGE_FILE_MACHINE_AMD64:
         break;
     case IMAGE_FILE_MACHINE_I386:
-        rv = funcaddr(pid, injector);
-        if (rv != 0) {
-            goto error_exit;
+        static USHORT native_machine = IMAGE_FILE_MACHINE_UNKNOWN;
+        if (native_machine == IMAGE_FILE_MACHINE_UNKNOWN) {
+            USHORT dummy;
+            if (!IsWow64Process2(GetCurrentProcess(), &dummy, &native_machine)) {
+                native_machine = IMAGE_FILE_MACHINE_AMD64;
+            }
         }
-        break;
-#endif
-#ifdef _M_ARM64
-    case IMAGE_FILE_MACHINE_ARM64:
-        break;
-    case IMAGE_FILE_MACHINE_ARMNT:
-        rv = funcaddr(pid, injector);
-        if (rv != 0) {
-            goto error_exit;
+        if (native_machine == IMAGE_FILE_MACHINE_AMD64) {
+            // x86 process on Windows x64
+            break;
         }
-        break;
+        // x86 process on Windows arm64
+        // FALL THROUGH
 #endif
-#ifdef _M_ARMT
-    case IMAGE_FILE_MACHINE_ARMNT:
-        break;
-#endif
-#ifdef _M_IX86
+#if defined(_M_IX86) // x86
     case IMAGE_FILE_MACHINE_I386:
+        break;
+#endif
+#if defined(_M_ARMT) // arm32
+    case IMAGE_FILE_MACHINE_ARMNT:
         break;
 #endif
     default:
@@ -515,6 +534,13 @@ int injector_attach(injector_t **injector_out, DWORD pid)
                    arch_name(injector->arch), CURRENT_ARCH);
         rv = INJERR_UNSUPPORTED_TARGET;
         goto error_exit;
+    }
+
+    if (injector->arch != CURRENT_IMAGE_FILE_MACHINE) {
+        rv = funcaddr(pid, injector);
+        if (rv != 0) {
+            goto error_exit;
+        }
     }
 
     injector->code = VirtualAllocEx(injector->hProcess, NULL, 2 * page_size,
@@ -526,35 +552,27 @@ int injector_attach(injector_t **injector_out, DWORD pid)
     }
     injector->data = injector->code + page_size;
     switch (injector->arch) {
-#ifdef _M_AMD64
     case IMAGE_FILE_MACHINE_AMD64: /* x64 */
         memcpy(code, x64_code_template, X64_CODE_SIZE);
         code_size = X64_CODE_SIZE;
         *(size_t*)(code + X64_ADDR_GetLastError) = injector->get_last_error;
         break;
-#endif
-#ifdef _M_ARM64
     case IMAGE_FILE_MACHINE_ARM64: /* arm64 */
         memcpy(code, arm64_code_template, ARM64_CODE_SIZE);
         code_size = ARM64_CODE_SIZE;
         *(size_t*)(code + ARM64_ADDR_GetLastError) = injector->get_last_error;
         break;
-#endif
-#if defined(_M_ARM64) || defined(_M_ARMT)
     case IMAGE_FILE_MACHINE_ARMNT: /* arm (thumb mode) */
         memcpy(code, armt_code_template, ARMT_CODE_SIZE);
         code_size = ARMT_CODE_SIZE;
         *(uint32_t*)(code + ARMT_ADDR_GetLastError) = (uint32_t)injector->get_last_error;
         break;
-#endif
-#if defined(_M_AMD64) || defined(_M_IX86)
     case IMAGE_FILE_MACHINE_I386: /* x86 */
         memcpy(code, x86_code_template, X86_CODE_SIZE);
         code_size = X86_CODE_SIZE;
 #define FIX_CALL_RELATIVE(addr, offset) *(uint32_t*)(code + offset + 1) = addr - ((uint32_t)(size_t)injector->code + offset + 5)
         FIX_CALL_RELATIVE(injector->get_last_error, X86_CALL_GetLastError);
         break;
-#endif
     default:
         set_errmsg("Never reach here: arch=0x%x", injector->arch);
         rv = INJERR_OTHER;
@@ -775,52 +793,35 @@ static const char *w32strerr(DWORD err)
 
 static USHORT process_arch(HANDLE hProcess)
 {
-    static IsWow64Process2_t IsWow64Process2_func = (IsWow64Process2_t)-1;
-    if (IsWow64Process2_func == (IsWow64Process2_t)-1) {
-        IsWow64Process2_func = (IsWow64Process2_t)GetProcAddress(GetModuleHandleA("kernel32"), "IsWow64Process2");
+    PROCESS_MACHINE_INFORMATION pmi;
+    if (GetProcessInformation(hProcess, ProcessMachineTypeInfo, &pmi, sizeof(pmi))) {
+        // Windows 11
+        return pmi.ProcessMachine;
     }
-    if (IsWow64Process2_func != NULL) {
-        /* Windows 10 */
-        USHORT process_machine;
-        USHORT native_machine;
-        if (IsWow64Process2_func(hProcess, &process_machine, &native_machine)) {
-            if (process_machine != IMAGE_FILE_MACHINE_UNKNOWN) {
-                return process_machine;
-            } else {
-                return native_machine;
-            }
+    USHORT process_machine;
+    USHORT native_machine;
+    if (IsWow64Process2(hProcess, &process_machine, &native_machine)) {
+        // Windows 10
+        if (process_machine != IMAGE_FILE_MACHINE_UNKNOWN) {
+            return process_machine;
+        } else {
+            return native_machine;
         }
-    } else {
-        /* Windows 8.1 or earlier */
-        /* arch will be either x86 or x64. */
-#ifdef _M_AMD64
-        BOOL is_wow64_proc;
-        if (IsWow64Process(hProcess, &is_wow64_proc)) {
-            if (is_wow64_proc) {
-                return IMAGE_FILE_MACHINE_I386;
-            } else {
-                return IMAGE_FILE_MACHINE_AMD64;
-            }
-        }
-#endif
-#ifdef _M_IX86
-        BOOL is_wow64_proc;
-        if (IsWow64Process(GetCurrentProcess(), &is_wow64_proc)) {
-            if (!is_wow64_proc) {
-                /* Run on 32-bit Windows */
-                return IMAGE_FILE_MACHINE_I386;
-            }
-            /* Run on Windows x64 */
-            if (IsWow64Process(hProcess, &is_wow64_proc)) {
-                if (is_wow64_proc) {
-                    return IMAGE_FILE_MACHINE_I386;
-                } else {
-                    return IMAGE_FILE_MACHINE_AMD64;
-                }
-            }
-        }
-#endif
     }
+    /* Windows 8.1 or earlier */
+    /* arch will be either x86 or x64. */
+#if defined(_M_AMD64) || defined(_M_IX86)
+    BOOL is_wow64_proc;
+#if defined(_M_IX86)
+    if (IsWow64Process(GetCurrentProcess(), &is_wow64_proc) && !is_wow64_proc) {
+        // Run on 32-bit Windows
+        return IMAGE_FILE_MACHINE_I386;
+    }
+#endif
+    if (IsWow64Process(hProcess, &is_wow64_proc)) {
+        return is_wow64_proc ? IMAGE_FILE_MACHINE_I386 : IMAGE_FILE_MACHINE_AMD64;
+    }
+#endif
     return IMAGE_FILE_MACHINE_UNKNOWN;
 }
 

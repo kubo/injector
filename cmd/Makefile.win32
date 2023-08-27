@@ -5,6 +5,10 @@ RTFLAG = -MD  # link with dynamic runtime library
 
 CFLAGS = -nologo $(RTFLAG) -I../include
 
+!IF "$(ARM64EC)" != ""
+CFLAGS = $(CFLAGS) -arm64EC
+!ENDIF
+
 OBJS = main.obj ya_getopt.obj
 INJECTOR_LIB = ..\src\windows\injector-static.lib
 

@@ -3,17 +3,23 @@ all: test-prog.exe test-target.exe test-library.dll
 RTFLAG = -MD  # link with dynamic runtime library
 # RTFLAG = -MT  # link with static runtime library
 
+CFLAGS = -nologo $(RTFLAG)
+
+!IF "$(ARM64EC)" != ""
+CFLAGS = $(CFLAGS) -arm64EC
+!ENDIF
+
 check: all
 	.\test-prog.exe
 
 test-prog.exe: test-prog.c ..\src\windows\injector-static.lib
-	$(CC) $(RTFLAG) /Fetest-prog.exe test-prog.c ..\src\windows\injector-static.lib
+	$(CC) $(CFLAGS) /Fetest-prog.exe test-prog.c ..\src\windows\injector-static.lib
 
 test-target.exe: test-target.c
-	$(CC) $(RTFLAG) /Fetest-target.exe test-target.c /link /DEF:test-target.def
+	$(CC) $(CFLAGS) /Fetest-target.exe test-target.c /link /DEF:test-target.def
 
 test-library.dll: test-library.c
-	$(CC) /LD $(RTFLAG) /Fetest-library.dll test-library.c
+	$(CC) /LD $(CFLAGS) /Fetest-library.dll test-library.c
 
 clean:
 	del test-target.exe test-target.exp test-target.obj test-target.lib test-prog.exe test-prog.obj test-library.dll test-library.obj

@@ -154,9 +154,9 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
   injector process \ target process | x86_64 | i386 | x32(*1)
   ---|---|---|---
-  **x86_64** | success(*2) | success(*3) | success(*3)
-  **i386**   | failure(*4) | success(*3) | failure(*5)
-  **x32**(*1) | failure(*4) | success(*3) | failure(*5)
+  **x86_64** | :smiley: success(*2) | :smiley: success(*3) | :smiley: success(*3)
+  **i386**   | :skull:  failure(*4) | :smiley: success(*3) | :skull:  failure(*5)
+  **x32**(*1) | :skull:  failure(*4) | :smiley: success(*3) | :skull:  failure(*5)
 
   *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
   *2: tested on github actions with both glibc and musl.  
@@ -168,9 +168,9 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
   injector process \ target process | arm64 | armhf | armel
   ---|---|---|---
-  **arm64** | success     | success | success
-  **armhf** | failure(*1) | success | success
-  **armel** | failure(*1) | success | success
+  **arm64** | :smiley: success     | :smiley: success | :smiley: success
+  **armhf** | :skull:  failure(*1) | :smiley: success | :smiley: success
+  **armel** | :skull:  failure(*1) | :smiley: success | :smiley: success
 
   *1: failure with `64-bit target process isn't supported by 32-bit process`.  
 
@@ -178,9 +178,9 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
   injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
   ---|---|---|---
-  **mips64el** | success (*1)    | success (*1) | success (*1)
-  **mipsel (n32)** | failure(*2) | success (*1) | success (*1)
-  **mipsel (o32)** | failure(*2) | success (*1) | success (*1)
+  **mips64el** | :smiley: success (*1)    | :smiley: success (*1) | :smiley: success (*1)
+  **mipsel (n32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
+  **mipsel (o32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
 
   *1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
   *2: failure with `64-bit target process isn't supported by 32-bit process`.  
@@ -196,22 +196,32 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
 ## Windows
 
-injector process \ target process | x64 | x86 | arm64
----|---|---|---
-**x64**     | success(*2) | success(*2) | -
-**x86**     | failure(*1) | success(*2) | -
-**arm64**   | -           | -           | not tested(*3)
+On x64 machine:
+
+injector process \ target process | x64 | x86
+---|---|---
+**x64**     | :smiley: success(*2) | :smiley: success(*2)
+**x86**     | :skull:  failure(*1) | :smiley: success(*2)
 
 *1: failure with `x64 target process isn't supported by x86 process`.  
 *2: tested on github actions  
-*3: It may work though I have not tested it. Let me know if it really works.
+
+On arm machine:
+
+injector process \ target process | arm64 | arm64ec | x64 | x86 | arm32
+---|---|---|---|---|---
+**arm64**   | :smiley: success | :skull:  failure | :skull:  failure | :skull:  failure | :smiley: success
+**arm64ec** | :skull:  failure | :smiley: success | :smiley: success | :skull:  failure | :skull:  failure
+**x64**     | :skull:  failure | :smiley: success | :smiley: success | :skull:  failure | :skull:  failure
+**x86**     | :skull:  failure | :skull:  failure | :skull:  failure | :smiley: success | :skull:  failure
+**arm32**   | :skull:  failure | :skull:  failure | :skull:  failure | :skull:  failure | :smiley: success
 
 ## MacOS
 
 injector process \ target process | x64 | arm64
 ---|---|---
-**x64**     | success(*1) | failure(*2) 
-**arm64**   | failure(*3) | success        
+**x64**     | :smiley: success(*1) | :skull:  failure(*2)
+**arm64**   | :skull:  failure(*3) | :smiley: success
 
 *1: failure with `x86_64 target process isn't supported by x86_64 process on ARM64 machine`. Tested on github actions.  
 *2: failure with `arm64 target process isn't supported by x86_64 process.`  

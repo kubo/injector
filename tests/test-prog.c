@@ -355,7 +355,7 @@ static void process_terminate(process_t *proc)
 
 static int test_remote_call(injector_t *injector, void *handle)
 {
-#if defined(__linux__) || defined(_WIN32)
+#ifdef INJECTOR_HAS_REMOTE_CALL_FUNCS
     printf("test remote call.\n");
     fflush(stdout);
 

@@ -135,11 +135,12 @@ int injector_call(injector_t *injector, void *handle, const char* name);
 const char *injector_error(void);
 
 #if defined(INJECTOR_DOC) || defined(__linux__) || defined(_WIN32)
+#define INJECTOR_HAS_REMOTE_CALL_FUNCS 1
 #include <stdarg.h>
 #include <stdint.h>
 
 /*!
- * \brief Get the function address in the target process (Linux only)
+ * \brief Get the function address in the target process (Linux and Windows only)
  * \param[in]   injector      the injector handle specifying the target process
  * \param[in]   handle        the module handle created by \c injector_inject or special-handles such as \c RTLD_DEFAULT
  * \param[in]   name          the function name
@@ -147,17 +148,21 @@ const char *injector_error(void);
  * \return                    zero on success. Otherwise, error code
  *
  * \b Example
+ *
+ * Inject libfoo.so and then call foo_func(1, 2, 3) in it.
  * \code
- * // Inject libfoo.so and then call foo_func(1, 2, 3) in it.
  * void *handle;
+ * // inject libfoo.so and get the handle
  * if (injector_inject(injector, "libfoo.so", &handle) != 0) {
  *    return;
  * }
  * size_t func_addr;
+ * // get the address of foo_func in the handle
  * if (injector_remote_func_addr(injector, handle, "foo_func", &func_addr) != 0) {
  *    return;
  * }
- * long retval;
+ * intptr_t retval;
+ * // call foo_func
  * if (injector_remote_call(injector, &retval, func_addr, 1, 2, 3) != 0) {
  *    return;
  * }
@@ -167,7 +172,7 @@ const char *injector_error(void);
 int injector_remote_func_addr(injector_t *injector, void *handle, const char* name, size_t *func_addr_out);
 
 /*!
- * \brief Call the function in the target process (Linux only)
+ * \brief Call the function in the target process (Linux and Windows only)
  * \param[in]   injector  the injector handle specifying the target process
  * \param[out]  retval    \c NULL or the address where the return value of the function call will be stored
  * \param[in]   func_addr the function address in the target process
@@ -185,7 +190,7 @@ int injector_remote_func_addr(injector_t *injector, void *handle, const char* na
 int injector_remote_call(injector_t *injector, intptr_t *retval, size_t func_addr, ...);
 
 /*!
- * \brief Call the function in the target process (Linux only)
+ * \brief Call the function in the target process (Linux and Windows only)
  * \param[in]   injector  the injector handle specifying the target process
  * \param[out]  retval    \c NULL or the address where the return value of the function call will be stored
  * \param[in]   func_addr the function address in the target process

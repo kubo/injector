@@ -208,11 +208,11 @@ Linux</h2>
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x86_64   </th><th class="markdownTableHeadNone">i386   </th><th class="markdownTableHeadNone">x32(*1)    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x86_64</b>   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">success(*3)    </td></tr>
+<td class="markdownTableBodyNone"><b>x86_64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>i386</b>   </td><td class="markdownTableBodyNone">failure(*4)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">failure(*5)    </td></tr>
+<td class="markdownTableBodyNone"><b>i386</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*4)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*5)    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x32</b>(*1)   </td><td class="markdownTableBodyNone">failure(*4)   </td><td class="markdownTableBodyNone">success(*3)   </td><td class="markdownTableBodyNone">failure(*5)   </td></tr>
+<td class="markdownTableBodyNone"><b>x32</b>(*1)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*4)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*5)   </td></tr>
 </table>
 <p>*1: <a href="https://en.wikipedia.org/wiki/X32_ABI">x32 ABI</a> <br  />
  *2: tested on github actions with both glibc and musl. <br  />
@@ -227,11 +227,11 @@ Linux</h2>
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">arm64   </th><th class="markdownTableHeadNone">armhf   </th><th class="markdownTableHeadNone">armel    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success    </td></tr>
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>armhf</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success    </td></tr>
+<td class="markdownTableBodyNone"><b>armhf</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*1)   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>armel</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success   </td><td class="markdownTableBodyNone">success   </td></tr>
+<td class="markdownTableBodyNone"><b>armel</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*1)   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success   </td></tr>
 </table>
 <p>*1: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
 </p>
@@ -242,11 +242,11 @@ Linux</h2>
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">mips64el   </th><th class="markdownTableHeadNone">mipsel (n32)   </th><th class="markdownTableHeadNone">mipsel (o32)    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>mips64el</b>   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)    </td></tr>
+<td class="markdownTableBodyNone"><b>mips64el</b>   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>mipsel (n32)</b>   </td><td class="markdownTableBodyNone">failure(*2)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)    </td></tr>
+<td class="markdownTableBodyNone"><b>mipsel (n32)</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>mipsel (o32)</b>   </td><td class="markdownTableBodyNone">failure(*2)   </td><td class="markdownTableBodyNone">success (*1)   </td><td class="markdownTableBodyNone">success (*1)   </td></tr>
+<td class="markdownTableBodyNone"><b>mipsel (o32)</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)   </td><td class="markdownTableBodyNone">&#x1f603; success (*1)   </td></tr>
 </table>
 <p>*1: tested on <a href="https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271">debian 11 mips64el</a> on <a href="https://www.qemu.org/">QEMU</a>. <br  />
  *2: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
@@ -264,28 +264,42 @@ Linux</h2>
 </ul>
 <h2><a class="anchor" id="autotoc_md13"></a>
 Windows</h2>
+<p>On x64 machine:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
-<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86   </th><th class="markdownTableHeadNone">arm64    </th></tr>
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">-    </td></tr>
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>x86</b>   </td><td class="markdownTableBodyNone">failure(*1)   </td><td class="markdownTableBodyNone">success(*2)   </td><td class="markdownTableBodyNone">-    </td></tr>
-<tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">-   </td><td class="markdownTableBodyNone">-   </td><td class="markdownTableBodyNone">not tested(*3)   </td></tr>
+<td class="markdownTableBodyNone"><b>x86</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*1)   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)   </td></tr>
 </table>
 <p>*1: failure with <code>x64 target process isn't supported by x86 process</code>. <br  />
  *2: tested on github actions <br  />
- *3: It may work though I have not tested it. Let me know if it really works.</p>
+</p>
+<p>On arm machine:</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">arm64   </th><th class="markdownTableHeadNone">arm64ec   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86   </th><th class="markdownTableHeadNone">arm32    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>arm64ec</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>x86</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f480; failure    </td></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>arm32</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td></tr>
+</table>
 <h2><a class="anchor" id="autotoc_md14"></a>
 MacOS</h2>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">arm64    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">success(*1)   </td><td class="markdownTableBodyNone">failure(*2)    </td></tr>
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success(*1)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*2)    </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">failure(*3)   </td><td class="markdownTableBodyNone">success   </td></tr>
+<td class="markdownTableBodyNone"><b>arm64</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*3)   </td><td class="markdownTableBodyNone">&#x1f603; success   </td></tr>
 </table>
 <p>*1: failure with <code>x86_64 target process isn't supported by x86_64 process on ARM64 machine</code>. Tested on github actions. <br  />
  *2: failure with <code>arm64 target process isn't supported by x86_64 process.</code> <br  />

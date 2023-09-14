@@ -14,6 +14,7 @@ jobs:
       - name: genereate docs
         run: |
           doxygen
+          sed -i -e 's/:smiley:/\&#x1f603;/g' -e 's/:skull:/\&#x1f480;/g' html/index.html
       - name: push docs
         run: |
           git fetch --depth=1 origin gh-pages
@@ -22,7 +23,5 @@ jobs:
           mv html docs
           git config --local user.email "docs-action@github.com"
           git config --local user.name "GitHub Action (docs)"
-          git add docs
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git commit -m 'Add docs'
-          git push origin gh-pages
+          git diff --quiet || (git add docs && git commit -m 'Add docs' && git push origin gh-pages && echo Add docs)

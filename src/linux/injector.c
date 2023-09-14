@@ -146,19 +146,23 @@ int injector_inject(injector_t *injector, const char *path, void **handle)
 
     injector__errmsg_is_set = 0;
 
-    if (realpath(path, abspath) == NULL) {
+    if (path[0] == '/') {
+        len = strlen(path) + 1;
+    } else if (realpath(path, abspath) != NULL) {
+        path = abspath;
+        len = strlen(abspath) + 1;
+    } else {
         injector__set_errmsg("failed to get the full path of '%s': %s",
                            path, strerror(errno));
         return INJERR_FILE_NOT_FOUND;
     }
-    len = strlen(abspath) + 1;
 
     if (len > injector->data_size) {
         injector__set_errmsg("too long file path: %s", path);
         return INJERR_FILE_NOT_FOUND;
     }
 
-    rv = injector__write(injector, injector->data, abspath, len);
+    rv = injector__write(injector, injector->data, path, len);
     if (rv != 0) {
         return rv;
     }

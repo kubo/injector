@@ -166,7 +166,7 @@ int injector__call_function_va_list(const injector_t *injector, intptr_t *retval
 /* util.c */
 extern char injector__errmsg[];
 extern char injector__errmsg_is_set;
-void injector__set_errmsg(const char *format, ...);
+void injector__set_errmsg(const char *format, ...) __attribute__((format (printf, 1, 2)));
 const char *injector__arch2name(arch_t arch);
 
 /* shellcode.S */

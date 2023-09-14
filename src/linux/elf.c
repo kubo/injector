@@ -24,8 +24,14 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <regex.h>
 #include <elf.h>
+#include <glob.h>
+#include <sys/sysmacros.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "injector_internal.h"
 
 #ifdef __LP64__
@@ -49,7 +55,8 @@ typedef struct {
     size_t sym_entsize;
 } param_t;
 
-static int open_libc(FILE **fp_out, pid_t pid, size_t *addr);
+static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr);
+static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
 static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size);
@@ -67,7 +74,7 @@ int injector__collect_libc_information(injector_t *injector)
     int idx;
     int rv;
 
-    rv = open_libc(&fp, pid, &prm.libc_addr);
+    rv = search_and_open_libc(&fp, pid, &prm.libc_addr);
     if (rv != 0) {
         return rv;
     }
@@ -260,7 +267,7 @@ cleanup:
     return rv;
 }
 
-static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
+static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr)
 {
     char buf[512];
     FILE *fp = NULL;
@@ -280,41 +287,82 @@ static int open_libc(FILE **fp_out, pid_t pid, size_t *addr)
     }
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         unsigned long saddr, eaddr;
-        if (sscanf(buf, "%lx-%lx r-xp", &saddr, &eaddr) == 2) {
-            if (regexec(&reg, buf, 1, &match, 0) == 0) {
-                char *p = buf + match.rm_eo;
-                if (strcmp(p, "\n") == 0) {
-                    char *libc_path = strchr(buf, '/');
-                    fclose(fp);
-                    *p = '\0';
-                    fp = fopen(libc_path, "r");
-                    if (fp == NULL) {
-                        p = strstr(libc_path, "/rootfs/"); /* under LXD */
-                        if (p != NULL) {
-                            fp = fopen(p + 7, "r");
-                        }
-                    }
-                    if (fp == NULL) {
-                        injector__set_errmsg("failed to open %s. (error: %s)", libc_path, strerror(errno));
-                        regfree(&reg);
-                        return INJERR_NO_LIBRARY;
-                    }
-                    *addr = saddr;
-                    *fp_out = fp;
-                    regfree(&reg);
-                    return 0;
-                } else if (strcmp(p, ".so (deleted)\n") == 0) {
-                    injector__set_errmsg("The C library when the process started was removed");
-                    fclose(fp);
-                    regfree(&reg);
-                    return INJERR_NO_LIBRARY;
-                }
-            }
+        unsigned long long offset, inode;
+        unsigned int dev_major, dev_minor;
+        if (sscanf(buf, "%lx-%lx %*s %llx %x:%x %llu", &saddr, &eaddr, &offset, &dev_major, &dev_minor, &inode) != 6) {
+            continue;
         }
+        if (offset != 0) {
+            continue;
+        }
+        if (regexec(&reg, buf, 1, &match, 0) != 0) {
+            continue;
+        }
+        char *p = buf + match.rm_eo;
+        if (strcmp(p, " (deleted)\n") == 0) {
+            injector__set_errmsg("The C library when the process started was removed");
+            fclose(fp);
+            regfree(&reg);
+            return INJERR_NO_LIBRARY;
+        }
+        if (strcmp(p, "\n") != 0) {
+            continue;
+        }
+        fclose(fp);
+        *addr = saddr;
+        regfree(&reg);
+        *p = '\0';
+        return open_libc(fp_out, strchr(buf, '/'), makedev(dev_major, dev_minor), inode);
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");
     regfree(&reg);
+    return INJERR_NO_LIBRARY;
+}
+
+static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino)
+{
+    struct stat sbuf;
+    glob_t globbuf;
+    FILE *fp = fopen(path, "r");
+
+    if (fp == NULL) {
+        const char *p = strstr(path, "/rootfs/"); /* under LXD */
+        if (p != NULL) {
+            fp = fopen(p + 7, "r");
+        }
+    }
+    if (fp != NULL) {
+        if (fstat(fileno(fp), &sbuf) == 0 && sbuf.st_dev == dev && sbuf.st_ino == ino) {
+            // Found
+            *fp_out = fp;
+            return 0;
+        }
+        fclose(fp);
+    }
+    // Could not find the valid libc in the specified path.
+
+    // Search libc in base snaps. (https://snapcraft.io/docs/base-snaps)
+    if (glob("/snap/core*/*", GLOB_NOSORT, NULL, &globbuf) == 0) {
+        size_t idx;
+        for (idx = 0; idx < globbuf.gl_pathc; idx++) {
+            char buf[512];
+            snprintf(buf, sizeof(buf), "%s%s", globbuf.gl_pathv[idx], path);
+            buf[sizeof(buf) - 1] = '\0';
+            fp = fopen(buf, "r");
+            if (fp != NULL) {
+                if (fstat(fileno(fp), &sbuf) == 0 && sbuf.st_dev == dev && sbuf.st_ino == ino) {
+                    // Found
+                    *fp_out = fp;
+                    globfree(&globbuf);
+                    return 0;
+                }
+                fclose(fp);
+            }
+        }
+        globfree(&globbuf);
+    }
+    injector__set_errmsg("failed to open %s. (dev:0x%" PRIx64 ", ino:%lu)", path, dev, ino);
     return INJERR_NO_LIBRARY;
 }
 

@@ -46,8 +46,42 @@
 #ifdef _WIN32
 #define EXEEXT ".exe"
 #define DLLEXT ".dll"
-#define INJECT_ERRMSG "LoadLibrary in the target process failed: The specified module could not be found."
-#define UNINJECT_ERRMSG "FreeLibrary in the target process failed: The specified module could not be found."
+static BOOL is_under_wine() {
+  static enum {
+    ST_UNKNOWN,
+    ST_WINE,
+    ST_NOT_WINE,
+  } state = ST_UNKNOWN;
+  if (state == ST_UNKNOWN) {
+    if (GetProcAddress(GetModuleHandleA("ntdll.dll"), "wine_get_version")) {
+      state = ST_WINE;
+    } else {
+      state = ST_NOT_WINE;
+    }
+  }
+  return state == ST_WINE;
+}
+
+static const char *inject_errmsg()
+{
+  if (is_under_wine()) {
+    return "LoadLibrary in the target process failed: Module not found.";
+  } else {
+    return "LoadLibrary in the target process failed: The specified module could not be found.";
+  }
+}
+#define INJECT_ERRMSG inject_errmsg()
+
+static const char *uninject_errmsg()
+{
+  if (is_under_wine()) {
+    return "FreeLibrary in the target process failed: Invalid handle.";
+  } else {
+    return "FreeLibrary in the target process failed: The specified module could not be found.";
+  }
+}
+#define UNINJECT_ERRMSG uninject_errmsg()
+
 #elif __APPLE__
 #define EXEEXT ""
 #define DLLEXT ".dylib"

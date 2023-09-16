@@ -60,6 +60,7 @@ typedef struct _PROCESS_MACHINE_INFORMATION {
 #endif
 
 typedef BOOL (WINAPI *IsWow64Process2_t)(HANDLE hProcess, USHORT *pProcessMachine, USHORT *pNativeMachine);
+typedef BOOL (WINAPI *GetProcessInformation_t)(HANDLE hProcess, PROCESS_INFORMATION_CLASS ProcessInformationClass, LPVOID ProcessInformation, DWORD ProcessInformationSize);
 
 static DWORD page_size = 0;
 static size_t func_LoadLibraryW;
@@ -208,6 +209,19 @@ static BOOL CallIsWow64Process2(HANDLE hProcess, USHORT *pProcessMachine, USHORT
     return IsWow64Process2_func(hProcess, pProcessMachine, pNativeMachine);
 }
 #define IsWow64Process2 CallIsWow64Process2
+
+static BOOL CallGetProcessInformation(HANDLE hProcess, PROCESS_INFORMATION_CLASS ProcessInformationClass, LPVOID ProcessInformation, DWORD ProcessInformationSize)
+{
+    static GetProcessInformation_t GetProcessInformation_func = (GetProcessInformation_t)-1;
+    if (GetProcessInformation_func == (GetProcessInformation_t)-1) {
+        GetProcessInformation_func = (GetProcessInformation_t)GetProcAddress(GetModuleHandleA("kernel32"), "GetProcessInformation");
+    }
+    if (GetProcessInformation_func == NULL) {
+       return FALSE;
+    }
+    return GetProcessInformation_func(hProcess, ProcessInformationClass, ProcessInformation, ProcessInformationSize);
+}
+#define GetProcessInformation CallGetProcessInformation
 
 static void set_errmsg(const char *format, ...);
 static const char *w32strerr(DWORD err);

@@ -13,14 +13,32 @@ jobs:
         submodules: true
     - name: Install packages
       run: |
-        sudo apt update
-        sudo apt install -y gcc-multilib
-    - name: run tests
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y gcc-multilib gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 libgcc-s1:i386 libstdc++6:i386 wine32 wine64 wine-binfmt
+        sudo apt-get remove mono-runtime
+        echo WINEPATH=$(ls -d /usr/lib/gcc/*-mingw*/*-win32 | tr '\n' ';') >> $GITHUB_ENV
+    - name: build
       run: |
-        make check
-    - name: dlopen in cloned thread
+        cd tests && make cross
+    - name: x86_64 -> x86_64
+      run: |
+        cd tests && ./test-prog-x86_64 x86_64
+    - name: x86_64 -> i386
+      run: |
+        cd tests && ./test-prog-x86_64 i386
+    - name: i386 -> i386
+      run: |
+        cd tests && ./test-prog-i386 i386
+    - name: x86_64 -> x86_64 (cloned thread)
       run: |
         cd tests && ./test-prog-x86_64 x86_64 --cloned-thread
+    - name: mingw-x64 mingw-x64
+      run: |
+        cd tests && ./test-prog-mingw-x64.exe mingw-x64
+    - name: mingw-32 mingw-32
+      run: |
+        cd tests && ./test-prog-mingw-32.exe mingw-32
 
   tests_on_mac:
     name: Tests on MacOS (x86_64)

@@ -16,7 +16,7 @@ test-prog.exe: test-prog.c ..\src\windows\injector-static.lib
 	$(CC) $(CFLAGS) /Fetest-prog.exe test-prog.c ..\src\windows\injector-static.lib
 
 test-target.exe: test-target.c
-	$(CC) $(CFLAGS) /Fetest-target.exe test-target.c /link /DEF:test-target.def
+	$(CC) $(CFLAGS) /Fetest-target.exe test-target.c
 
 test-library.dll: test-library.c
 	$(CC) /LD $(CFLAGS) /Fetest-library.dll test-library.c

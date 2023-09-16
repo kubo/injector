@@ -3,13 +3,15 @@
 #ifdef _WIN32
 #include <windows.h>
 #define sleep(secs) Sleep(1000 * (secs))
+#define DLLEXPORT __declspec(dllexport)
 #else
 #include <unistd.h>
+#define DLLEXPORT
 #endif
 
 #define SLEEP_SECS 6
 
-int exit_value = 0;
+DLLEXPORT int exit_value = 0;
 
 int main()
 {

@@ -1,17 +1,22 @@
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-OS = macos
+ifeq ($(OS),Windows_NT)
+  SRC_DIR = src/windows
 else
-OS = linux
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Darwin)
+    SRC_DIR = src/macos
+  else
+    SRC_DIR = src/linux
+  endif
 endif
+
 all:
-	cd src/$(OS) && make
-	cd cmd && make
+	cd $(SRC_DIR) && $(MAKE)
+	cd cmd && $(MAKE)
 
 check:
-	cd tests && make check
+	cd tests && $(MAKE) check
 
 clean:
-	cd src/$(OS) && make clean
-	cd cmd && make clean
-	cd tests && make clean
+	cd $(SRC_DIR) && $(MAKE) clean
+	cd cmd && $(MAKE) clean
+	cd tests && $(MAKE) clean

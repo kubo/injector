@@ -61,6 +61,10 @@ jobs:
       shell: cmd
       run: |
         cd tests && .\test-prog-x64.exe
+    - name: mingw32-w64 (x86_64)
+      shell: bash
+      run: |
+        CC=x86_64-w64-mingw32-gcc make clean check
 
   tests_on_alpine_x86_64:
     name: Tests on Alpine (x86_64 only)

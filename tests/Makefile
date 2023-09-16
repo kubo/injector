@@ -1,4 +1,26 @@
-UNAME_S := $(shell uname -s)
+TEST_PROG_LIBS =
+TEST_TARGET_LDFLAGS =
+TEST_LIBRARY_LDFLAGS = -shared -fPIC
+
+ifeq ($(OS),Windows_NT)
+  SRC_DIR = ../src/windows
+  SO_EXT = dll
+  EXE_EXT = .exe
+  INJECTOR_STATIC_LIB = injector-static.lib
+  TEST_PROG_LIBS += -ldbghelp
+else
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Darwin)
+    SRC_DIR = ../src/macos
+    SO_EXT = dylib
+  else
+    SRC_DIR = ../src/linux
+    SO_EXT = so
+  endif
+  EXE_EXT =
+  INJECTOR_STATIC_LIB = libinjector.a
+  TEST_TARGET_LDFLAGS += -rdynamic
+endif
 
 BUILD_TARGETS =
 
@@ -60,13 +82,13 @@ ifneq ($(wildcard /usr/bin/riscv64-linux-gnu-gcc),)
   BUILD_TARGETS += riscv64
 endif
 
-ifeq ($(BUILD_TARGETS),)
-  BUILD_TARGETS = default
+ifneq ($(wildcard /usr/bin/x86_64-w64-mingw32-gcc),)
+  BUILD_TARGETS += mingw-x64
 endif
 
-LINK_PROG = $(CC) $(CFLAGS)
-LINK_TARGET = $(CC) $(CFLAGS) -rdynamic
-LINK_LIBRARY = $(CC) $(CFLAGS) -shared -fPIC
+ifneq ($(wildcard /usr/bin/i686-w64-mingw32-gcc),)
+  BUILD_TARGETS += mingw-32
+endif
 
 CHECK_TARGETS = \
   "x86_64 x86_64" \
@@ -82,10 +104,10 @@ CHECK_TARGETS = \
   "armel armhf" \
   "armel armel" \
 
-all: $(BUILD_TARGETS)
-
-default:
+all:
 	SUFFIX= $(MAKE) build
+
+cross: $(BUILD_TARGETS)
 
 x86_64:
 	@echo "=============== build: x86_64 ==============="; \
@@ -151,31 +173,30 @@ riscv64:
 	@echo "=============== build: riscv64 ==============="; \
 	CC=riscv64-linux-gnu-gcc SUFFIX=-riscv64 $(MAKE) build
 
-ifeq ($(UNAME_S),Darwin)
-POSTFIX = dylib
-else
-POSTFIX = so
-endif
+mingw-x64:
+	@echo "=============== build: mingw-x64 ==============="; \
+	CC=x86_64-w64-mingw32-gcc SUFFIX=-mingw-x64 OS=Windows_NT $(MAKE) build
 
-build: test-prog$(SUFFIX) test-target$(SUFFIX) test-library$(SUFFIX).$(POSTFIX)
-test-prog$(SUFFIX): test-prog.c
-ifeq ($(UNAME_S),Darwin)
-	cd ../src/macos && make clean && make
-	$(LINK_PROG) -o $@ $^ ../src/macos/libinjector.a
-else
-	cd ../src/linux && make clean && make
-	$(LINK_PROG) -o $@ $^ ../src/linux/libinjector.a
-endif
-test-target$(SUFFIX): test-target.c
-	$(LINK_TARGET) -o $@ $^
+mingw-32:
+	@echo "=============== build: mingw-32 ==============="; \
+	CC=i686-w64-mingw32-gcc SUFFIX=-mingw-32 OS=Windows_NT $(MAKE) build
 
-test-library$(SUFFIX).$(POSTFIX): test-library.c
-	$(LINK_LIBRARY) -o $@ $^
+build: test-prog$(SUFFIX)$(EXE_EXT) test-target$(SUFFIX)$(EXE_EXT) test-library$(SUFFIX).$(SO_EXT)
+
+test-prog$(SUFFIX)$(EXE_EXT): test-prog.c
+	cd $(SRC_DIR) && $(MAKE) clean && $(MAKE)
+	$(CC) $(CFLAGS) -o $@ $^ $(SRC_DIR)/$(INJECTOR_STATIC_LIB) $(TEST_PROG_LIBS)
+
+test-target$(SUFFIX)$(EXE_EXT): test-target.c
+	$(CC) $(CFLAGS) $(TEST_TARGET_LDFLAGS) -o $@ $^
+
+test-library$(SUFFIX).$(SO_EXT): test-library.c
+	$(CC) $(CFLAGS) $(TEST_LIBRARY_LDFLAGS) -o $@ $^
 
 check: all
-	@if test -x test-prog -a -x test-target; then \
+	@if test -x test-prog$(EXE_EXT) -a -x test-target$(EXE_EXT); then \
 	   echo "=============== injector: default, target: default ==============="; \
-	   ./test-prog || exit $$?; \
+	   ./test-prog$(EXE_EXT) || exit $$?; \
 	 fi;
 	@for target_pair in $(CHECK_TARGETS); do \
 	   set -- $$target_pair; \
@@ -187,6 +208,6 @@ check: all
 	 done
 
 clean:
-	$(RM) test-prog test-prog-* test-target test-target-* test-library test-library-*.so test-library*.so  test-library-*.dylib test-library*.dylib 
+	$(RM) test-prog$(EXE_EXT) test-prog-* test-target$(EXE_EXT) test-target-* test-library.$(SO_EXT) test-library-*.$(SO_EXT)
 
-.PHONY: default x86_64 i386 x32 arm64 armhf armel build check clean
+.PHONY: $(BUILD_TARGETS) build check clean

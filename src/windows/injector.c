@@ -22,6 +22,9 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0602
+#endif
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -407,7 +410,7 @@ static int remote_call(injector_t *injector, remote_call_args_t *args, size_t si
 {
     char *code = injector->code;
     HANDLE hThread;
-    size_t sz;
+    SIZE_T sz;
 
     if (injector->arch == IMAGE_FILE_MACHINE_ARMNT) {
         ++code;
@@ -504,10 +507,10 @@ int injector_attach(injector_t **injector_out, DWORD pid)
         break;
 #endif
 #if defined(_M_AMD64) // x64
+        static USHORT native_machine = IMAGE_FILE_MACHINE_UNKNOWN;
     case IMAGE_FILE_MACHINE_AMD64:
         break;
     case IMAGE_FILE_MACHINE_I386:
-        static USHORT native_machine = IMAGE_FILE_MACHINE_UNKNOWN;
         if (native_machine == IMAGE_FILE_MACHINE_UNKNOWN) {
             USHORT dummy;
             if (!IsWow64Process2(GetCurrentProcess(), &dummy, &native_machine)) {

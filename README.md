@@ -56,7 +56,7 @@ The `make` command creates:
 |`src/linux/libinjector.so` |a shared library|
 |`cmd/injector`             |a command line program linked with the static library|
 
-## Windows
+## Windows (MSVC)
 
 Open a Visual Studio command prompt and run the following commands:
 
@@ -77,6 +77,26 @@ The `nmake` command creates:
 |`src/windows/injectord.dll`        |a shared library (debug build)
 |`src/windows/injectord.lib`        |an import library for `injectord.dll`
 |`cmd/injector.exe`                 |a command line program linked the static library (release build)|
+
+## Windows (mingw-w64)
+
+On MSYS2:
+
+```shell
+$ git clone https://github.com/kubo/injector.git
+$ cd injector
+$ CC=gcc make
+```
+
+Cross-compilation on Linux:
+
+```shell
+$ git clone https://github.com/kubo/injector.git
+$ cd injector
+$ CC=x86_64-w64-mingw32-gcc OS=Windows_NT make
+```
+
+The environment variable `OS=Windows_NT` must be set on Linux.
 
 ## MacOS
 
@@ -150,53 +170,54 @@ See [`Usage` section and `Sample` section in linux-inject][`inject`] and substit
 
 ## Linux
 
-* x86
+x86_64:
 
-  injector process \ target process | x86_64 | i386 | x32(*1)
-  ---|---|---|---
-  **x86_64** | :smiley: success(*2) | :smiley: success(*3) | :smiley: success(*3)
-  **i386**   | :skull:  failure(*4) | :smiley: success(*3) | :skull:  failure(*5)
-  **x32**(*1) | :skull:  failure(*4) | :smiley: success(*3) | :skull:  failure(*5)
+injector process \ target process | x86_64 | i386 | x32(*1)
+---|---|---|---
+**x86_64** | :smiley: success(*2) | :smiley: success(*3) | :smiley: success(*6)
+**i386**   | :skull:  failure(*4) | :smiley: success(*3) | :skull:  failure(*5)
+**x32**(*1) | :skull:  failure(*4) | :smiley: success(*6) | :skull:  failure(*5)
 
-  *1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
-  *2: tested on github actions with both glibc and musl.  
-  *3: tested on github actions with glibc.  
-  *4: failure with `64-bit target process isn't supported by 32-bit process`.  
-  *5: failure with `x32-ABI target process is supported only by x86_64`.  
+*1: [x32 ABI](https://en.wikipedia.org/wiki/X32_ABI)  
+*2: tested on github actions with both glibc and musl.  
+*3: tested on github actions with glibc.  
+*4: failure with `64-bit target process isn't supported by 32-bit process`.  
+*5: failure with `x32-ABI target process is supported only by x86_64`.  
+*6: tested on a local machine. `CONFIG_X86_X32` isn't enabled in github actions.  
 
-* ARM
+ARM:
 
-  injector process \ target process | arm64 | armhf | armel
-  ---|---|---|---
-  **arm64** | :smiley: success     | :smiley: success | :smiley: success
-  **armhf** | :skull:  failure(*1) | :smiley: success | :smiley: success
-  **armel** | :skull:  failure(*1) | :smiley: success | :smiley: success
+injector process \ target process | arm64 | armhf | armel
+---|---|---|---
+**arm64** | :smiley: success     | :smiley: success | :smiley: success
+**armhf** | :skull:  failure(*1) | :smiley: success | :smiley: success
+**armel** | :skull:  failure(*1) | :smiley: success | :smiley: success
 
-  *1: failure with `64-bit target process isn't supported by 32-bit process`.  
+*1: failure with `64-bit target process isn't supported by 32-bit process`.  
 
-* MIPS
+MIPS:
 
-  injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
-  ---|---|---|---
-  **mips64el** | :smiley: success (*1)    | :smiley: success (*1) | :smiley: success (*1)
-  **mipsel (n32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
-  **mipsel (o32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
+injector process \ target process | mips64el | mipsel (n32) | mipsel (o32)
+---|---|---|---
+**mips64el** | :smiley: success (*1)    | :smiley: success (*1) | :smiley: success (*1)
+**mipsel (n32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
+**mipsel (o32)** | :skull:  failure(*2) | :smiley: success (*1) | :smiley: success (*1)
 
-  *1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
-  *2: failure with `64-bit target process isn't supported by 32-bit process`.  
+*1: tested on [debian 11 mips64el](https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271) on [QEMU](https://www.qemu.org/).  
+*2: failure with `64-bit target process isn't supported by 32-bit process`.  
 
-* PowerPC
+PowerPC:
 
-  * **ppc64le** (tested on [alpine 3.16.2 ppc64le](https://dl-cdn.alpinelinux.org/alpine/v3.16/releases/ppc64le/) on [QEMU](https://www.qemu.org/))
-  * **powerpc (big endian)** (tested on [ubuntu 16.04 powerpc](https://old-releases.ubuntu.com/releases/xenial/) on [QEMU](https://www.qemu.org/)
+* **ppc64le** (tested on [alpine 3.16.2 ppc64le](https://dl-cdn.alpinelinux.org/alpine/v3.16/releases/ppc64le/) on [QEMU](https://www.qemu.org/))
+* **powerpc (big endian)** (tested on [ubuntu 16.04 powerpc](https://old-releases.ubuntu.com/releases/xenial/) on [QEMU](https://www.qemu.org/)
 
-* RISC-V
+RISC-V:
 
-  * **riscv64** (tested on [Ubuntu 22.04.1 riscv64 on QEMU](https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU))
+* **riscv64** (tested on [Ubuntu 22.04.1 riscv64 on QEMU](https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU))
 
 ## Windows
 
-On x64 machine:
+Windows x64:
 
 injector process \ target process | x64 | x86
 ---|---|---
@@ -206,7 +227,7 @@ injector process \ target process | x64 | x86
 *1: failure with `x64 target process isn't supported by x86 process`.  
 *2: tested on github actions  
 
-On arm machine:
+Windows 11 on Arm:
 
 injector process \ target process | arm64 | arm64ec | x64 | x86 | arm32
 ---|---|---|---|---|---
@@ -215,6 +236,13 @@ injector process \ target process | arm64 | arm64ec | x64 | x86 | arm32
 **x64**     | :skull:  failure | :smiley: success | :smiley: success | :skull:  failure | :skull:  failure
 **x86**     | :skull:  failure | :skull:  failure | :skull:  failure | :smiley: success | :skull:  failure
 **arm32**   | :skull:  failure | :skull:  failure | :skull:  failure | :skull:  failure | :smiley: success
+
+[Wine](https://www.winehq.org/) (on Linux x86_64):
+
+injector process \ target process | x64 | x86
+---|---|---
+**x64**     | :smiley: success | :skull:  failure
+**x86**     | :skull:  failure | :smiley: success
 
 ## MacOS
 

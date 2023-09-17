@@ -108,7 +108,7 @@ Linux</h2>
 <td class="markdownTableBodyNone"><code>cmd/injector</code>   </td><td class="markdownTableBodyNone">a command line program linked with the static library   </td></tr>
 </table>
 <h2><a class="anchor" id="autotoc_md6"></a>
-Windows</h2>
+Windows (MSVC)</h2>
 <p>Open a Visual Studio command prompt and run the following commands:</p>
 <div class="fragment"><div class="line">$ git clone https://github.com/kubo/injector.git # Or use any other tool</div>
 <div class="line">$ cd injector</div>
@@ -133,6 +133,17 @@ Windows</h2>
 <td class="markdownTableBodyNone"><code>cmd/injector.exe</code>   </td><td class="markdownTableBodyNone">a command line program linked the static library (release build)   </td></tr>
 </table>
 <h2><a class="anchor" id="autotoc_md7"></a>
+Windows (mingw-w64)</h2>
+<p>On MSYS2:</p>
+<div class="fragment"><div class="line">$ git clone https://github.com/kubo/injector.git</div>
+<div class="line">$ cd injector</div>
+<div class="line">$ CC=gcc make</div>
+</div><!-- fragment --><p>Cross-compilation on Linux:</p>
+<div class="fragment"><div class="line">$ git clone https://github.com/kubo/injector.git</div>
+<div class="line">$ cd injector</div>
+<div class="line">$ CC=x86_64-w64-mingw32-gcc OS=Windows_NT make</div>
+</div><!-- fragment --><p>The environment variable <code>OS=Windows_NT</code> must be set on Linux.</p>
+<h2><a class="anchor" id="autotoc_md8"></a>
 MacOS</h2>
 <div class="fragment"><div class="line">$ git clone https://github.com/TheOiseth/injector.git</div>
 <div class="line">$ cd injector</div>
@@ -154,9 +165,9 @@ MacOS</h2>
 <div class="line">$ chmod +x sign.sh</div>
 <div class="line">$ ./sign.sh</div>
 </div><!-- fragment --><p> If injector still does not work after signing, reboot the system.</p>
-<h1><a class="anchor" id="autotoc_md8"></a>
+<h1><a class="anchor" id="autotoc_md9"></a>
 Usage</h1>
-<h2><a class="anchor" id="autotoc_md9"></a>
+<h2><a class="anchor" id="autotoc_md10"></a>
 C API</h2>
 <div class="fragment"><div class="line"><span class="preprocessor">#include &lt;<a class="code" href="injector_8h.html">injector.h</a>&gt;</span></div>
 <div class="line"> </div>
@@ -194,35 +205,32 @@ C API</h2>
 <div class="ttc" id="ainjector_8h_html_a875ece6d1a384097a3c2f09cf8c0406a"><div class="ttname"><a href="injector_8h.html#a875ece6d1a384097a3c2f09cf8c0406a">injector_attach</a></div><div class="ttdeci">int injector_attach(injector_t **injector, injector_pid_t pid)</div><div class="ttdoc">Attach to the specified process.</div></div>
 <div class="ttc" id="ainjector_8h_html_ad56227cc68b58213c19b600c8cb85292"><div class="ttname"><a href="injector_8h.html#ad56227cc68b58213c19b600c8cb85292">injector_uninject</a></div><div class="ttdeci">int injector_uninject(injector_t *injector, void *handle)</div><div class="ttdoc">Uninject the shared library specified by handle.</div></div>
 <div class="ttc" id="ainjector_8h_html_ad797b8baca0098fa09659c8b3ac913af"><div class="ttname"><a href="injector_8h.html#ad797b8baca0098fa09659c8b3ac913af">injector_detach</a></div><div class="ttdeci">int injector_detach(injector_t *injector)</div><div class="ttdoc">Detach from the attached process and destroy the specified handle.</div></div>
-</div><!-- fragment --><h2><a class="anchor" id="autotoc_md10"></a>
+</div><!-- fragment --><h2><a class="anchor" id="autotoc_md11"></a>
 Command line program</h2>
 <p>See <a href="https://github.com/gaffe23/linux-inject#usage"><code>Usage</code> section and <code>Sample</code> section in linux-inject</a> and substitute <code>inject</code> with <code>injector</code> in the page.</p>
-<h1><a class="anchor" id="autotoc_md11"></a>
+<h1><a class="anchor" id="autotoc_md12"></a>
 Tested Architectures</h1>
-<h2><a class="anchor" id="autotoc_md12"></a>
+<h2><a class="anchor" id="autotoc_md13"></a>
 Linux</h2>
-<ul>
-<li>x86</li>
-</ul>
+<p>x86_64:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x86_64   </th><th class="markdownTableHeadNone">i386   </th><th class="markdownTableHeadNone">x32(*1)    </th></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x86_64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)    </td></tr>
+<td class="markdownTableBodyNone"><b>x86_64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success(*2)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f603; success(*6)    </td></tr>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone"><b>i386</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure(*4)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*5)    </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone"><b>x32</b>(*1)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*4)   </td><td class="markdownTableBodyNone">&#x1f603; success(*3)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*5)   </td></tr>
+<td class="markdownTableBodyNone"><b>x32</b>(*1)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*4)   </td><td class="markdownTableBodyNone">&#x1f603; success(*6)   </td><td class="markdownTableBodyNone">&#x1f480; failure(*5)   </td></tr>
 </table>
 <p>*1: <a href="https://en.wikipedia.org/wiki/X32_ABI">x32 ABI</a> <br  />
  *2: tested on github actions with both glibc and musl. <br  />
  *3: tested on github actions with glibc. <br  />
  *4: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
  *5: failure with <code>x32-ABI target process is supported only by x86_64</code>. <br  />
+ *6: tested on a local machine. <code>CONFIG_X86_X32</code> isn't enabled in github actions. <br  />
 </p>
-<ul>
-<li>ARM</li>
-</ul>
+<p>ARM:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">arm64   </th><th class="markdownTableHeadNone">armhf   </th><th class="markdownTableHeadNone">armel    </th></tr>
@@ -235,9 +243,7 @@ Linux</h2>
 </table>
 <p>*1: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
 </p>
-<ul>
-<li>MIPS</li>
-</ul>
+<p>MIPS:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">mips64el   </th><th class="markdownTableHeadNone">mipsel (n32)   </th><th class="markdownTableHeadNone">mipsel (o32)    </th></tr>
@@ -251,20 +257,18 @@ Linux</h2>
 <p>*1: tested on <a href="https://www.debian.org/releases/bullseye/mips64el/ch02s01.en.html#idm271">debian 11 mips64el</a> on <a href="https://www.qemu.org/">QEMU</a>. <br  />
  *2: failure with <code>64-bit target process isn't supported by 32-bit process</code>. <br  />
 </p>
+<p>PowerPC:</p>
 <ul>
-<li>PowerPC<ul>
 <li><b>ppc64le</b> (tested on <a href="https://dl-cdn.alpinelinux.org/alpine/v3.16/releases/ppc64le/">alpine 3.16.2 ppc64le</a> on <a href="https://www.qemu.org/">QEMU</a>)</li>
 <li><b>powerpc (big endian)</b> (tested on <a href="https://old-releases.ubuntu.com/releases/xenial/">ubuntu 16.04 powerpc</a> on <a href="https://www.qemu.org/">QEMU</a></li>
 </ul>
-</li>
-<li>RISC-V<ul>
+<p>RISC-V:</p>
+<ul>
 <li><b>riscv64</b> (tested on <a href="https://wiki.ubuntu.com/RISC-V#Booting_with_QEMU">Ubuntu 22.04.1 riscv64 on QEMU</a>)</li>
 </ul>
-</li>
-</ul>
-<h2><a class="anchor" id="autotoc_md13"></a>
+<h2><a class="anchor" id="autotoc_md14"></a>
 Windows</h2>
-<p>On x64 machine:</p>
+<p>Windows x64:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86    </th></tr>
@@ -276,7 +280,7 @@ Windows</h2>
 <p>*1: failure with <code>x64 target process isn't supported by x86 process</code>. <br  />
  *2: tested on github actions <br  />
 </p>
-<p>On arm machine:</p>
+<p>Windows 11 on Arm:</p>
 <table class="markdownTable">
 <tr class="markdownTableHead">
 <th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">arm64   </th><th class="markdownTableHeadNone">arm64ec   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86   </th><th class="markdownTableHeadNone">arm32    </th></tr>
@@ -291,7 +295,16 @@ Windows</h2>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone"><b>arm32</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td></tr>
 </table>
-<h2><a class="anchor" id="autotoc_md14"></a>
+<p><a href="https://www.winehq.org/">Wine</a> (on Linux x86_64):</p>
+<table class="markdownTable">
+<tr class="markdownTableHead">
+<th class="markdownTableHeadNone">injector process \ target process   </th><th class="markdownTableHeadNone">x64   </th><th class="markdownTableHeadNone">x86    </th></tr>
+<tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone"><b>x64</b>   </td><td class="markdownTableBodyNone">&#x1f603; success   </td><td class="markdownTableBodyNone">&#x1f480; failure    </td></tr>
+<tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone"><b>x86</b>   </td><td class="markdownTableBodyNone">&#x1f480; failure   </td><td class="markdownTableBodyNone">&#x1f603; success   </td></tr>
+</table>
+<h2><a class="anchor" id="autotoc_md15"></a>
 MacOS</h2>
 <table class="markdownTable">
 <tr class="markdownTableHead">
@@ -304,7 +317,7 @@ MacOS</h2>
 <p>*1: failure with <code>x86_64 target process isn't supported by x86_64 process on ARM64 machine</code>. Tested on github actions. <br  />
  *2: failure with <code>arm64 target process isn't supported by x86_64 process.</code> <br  />
  *3: failure with <code>x86_64 target process isn't supported by arm64 process.</code></p>
-<h1><a class="anchor" id="autotoc_md15"></a>
+<h1><a class="anchor" id="autotoc_md16"></a>
 Caveats</h1>
 <p><b>The following restrictions are only on Linux.</b></p>
 <p>Injector doesn't work where <code>ptrace()</code> is disallowed.</p>
@@ -315,7 +328,7 @@ Caveats</h1>
 </ul>
 <p>Injector calls functions inside of a target process interrupted by <code>ptrace()</code>. If the target process is interrupted while holding a non-reentrant lock and injector calls a function requiring the same lock, the process stops forever. If the lock type is reentrant, the status guarded by the lock may become inconsistent. As far as I checked, <code>dlopen()</code> internally calls <code>malloc()</code> requiring non-reentrant locks. <code>dlopen()</code> also uses a reentrant lock to guard information about loaded files.</p>
 <p>On Linux x86_64 <code>injector_inject_in_cloned_thread</code> in place of <code>injector_inject</code> may be a solution of the locking issue. It calls <code>dlopen()</code> in a thread created by <a href="https://man7.org/linux/man-pages/man2/clone.2.html"><code>clone()</code></a>. Note that no wonder there are unexpected pitfalls because some resources allocated in <a href="https://man7.org/linux/man-pages/man3/pthread_create.3.html"><code>pthread_create()</code></a> lack in the <code>clone()</code>-ed thread. Use it at your own risk.</p>
-<h1><a class="anchor" id="autotoc_md16"></a>
+<h1><a class="anchor" id="autotoc_md17"></a>
 License</h1>
 <p>Files under [<code>include</code>][] and [<code>src</code>][] are licensed under LGPL 2.1 or later. <br  />
  Files under [<code>cmd</code>][] are licensed under GPL 2 or later. <br  />

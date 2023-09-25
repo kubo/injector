@@ -197,7 +197,7 @@ static void process_terminate(process_t *proc)
 struct process {
     pid_t pid;
     int waited;
-#ifndef __APPLE__
+#ifdef __linux__
     int is_musl;
 #endif
 };
@@ -428,7 +428,7 @@ int main(int argc, char **argv)
     void *handle = NULL;
     int rv = 1;
     int loop_cnt;
-    int can_uninject;
+    int can_uninject = 1;
     int (*inject_func)(injector_t *, const char *, void **) = injector_inject;
     int i;
 
@@ -462,13 +462,13 @@ int main(int argc, char **argv)
 
     sleep(1);
 
-#if defined(_WIN32) || defined(__APPLE__)
-    can_uninject = 1;
-#else
+#ifdef __linux__
     // Sadly this is not known at compile time, see https://www.openwall.com/lists/musl/2013/03/29/13
     proc.is_musl = process_check_module(&proc, "ld-musl-", 1) == 0;
     // In musl, dlclose doesn't do anything - see https://wiki.musl-libc.org/functional-differences-from-glibc.html
-    can_uninject = proc.is_musl ? 0 : 1;
+    if (proc.is_musl) {
+        can_uninject = 0;
+    }
 #endif
 
     for (loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
@@ -501,6 +501,14 @@ int main(int argc, char **argv)
             if (test_remote_call(injector, handle) != 0) {
                 goto cleanup;
             }
+#ifdef __linux__
+        } else if (proc.is_musl) {
+            int err = injector_uninject(injector, handle);
+            if (err != INJERR_UNSUPPORTED_TARGET) {
+                printf("uninject returns unexpected value: %d\n", err);
+                goto cleanup;
+            }
+#endif
         } else {
             if (injector_uninject(injector, handle) != 0) {
                 printf("uninject error:\n  %s\n", injector_error());

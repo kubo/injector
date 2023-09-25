@@ -72,6 +72,12 @@ typedef enum {
 } dlfunc_type_t;
 
 typedef enum {
+    LIBC_TYPE_UNKNOWN = 0,
+    LIBC_TYPE_GNU,
+    LIBC_TYPE_MUSL,
+} libc_type_t;
+
+typedef enum {
     ARCH_X86_64,
     ARCH_X86_64_X32,
     ARCH_I386,
@@ -108,6 +114,7 @@ struct injector {
     uint8_t attached;
     uint8_t mmapped;
     arch_t arch;
+    libc_type_t libc_type;
     struct user_regs_struct regs;
     dlfunc_type_t dlfunc_type;
     size_t dlopen_addr;

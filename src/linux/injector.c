@@ -352,6 +352,11 @@ int injector_uninject(injector_t *injector, void *handle)
     intptr_t retval;
 
     injector__errmsg_is_set = 0;
+    if (injector->libc_type == LIBC_TYPE_MUSL) {
+        /* Assume that libc is musl. */
+        injector__set_errmsg("Cannot uninject libraries under musl libc. See: https://wiki.musl-libc.org/functional-differences-from-glibc.html#Unloading_libraries");
+        return INJERR_UNSUPPORTED_TARGET;
+    }
 
     rv = injector__call_function(injector, &retval, injector->dlclose_addr, handle);
     if (rv != 0) {

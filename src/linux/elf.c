@@ -55,7 +55,7 @@ typedef struct {
     size_t sym_entsize;
 } param_t;
 
-static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr);
+static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_type_t *libc_type);
 static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
@@ -74,7 +74,7 @@ int injector__collect_libc_information(injector_t *injector)
     int idx;
     int rv;
 
-    rv = search_and_open_libc(&fp, pid, &prm.libc_addr);
+    rv = search_and_open_libc(&fp, pid, &prm.libc_addr, &injector->libc_type);
     if (rv != 0) {
         return rv;
     }
@@ -163,6 +163,12 @@ int injector__collect_libc_information(injector_t *injector)
         goto cleanup;
     }
 #endif
+
+    rv = find_symbol_addr(NULL, &prm, "gnu_get_libc_release", "gnu_get_libc_release");
+    if (rv == 0) {
+        /* GNU libc */
+        injector->libc_type = LIBC_TYPE_GNU;
+    }
 
     injector->dlfunc_type = prm.dlfunc_type;
     injector->code_addr = prm.libc_addr + ehdr.e_entry;
@@ -267,7 +273,7 @@ cleanup:
     return rv;
 }
 
-static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr)
+static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_type_t *libc_type)
 {
     char buf[512];
     FILE *fp = NULL;
@@ -280,7 +286,7 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         injector__set_errmsg("failed to open %s. (error: %s)", buf, strerror(errno));
         return INJERR_OTHER;
     }
-    /* /libc.so.6 or /libc-2.{DIGITS}.so or /lib/ld-musl-{arch}.so.1 */
+    /* /libc.so.6 or /libc-2.{DIGITS}.so or /ld-musl-{arch}.so.1 */
     if (regcomp(&reg, "/libc(\\.so\\.6|-2\\.[0-9]+\\.so)|/ld-musl-.+?\\.so\\.1", REG_EXTENDED) != 0) {
         injector__set_errmsg("regcomp failed!");
         return INJERR_OTHER;
@@ -310,6 +316,11 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         }
         fclose(fp);
         *addr = saddr;
+        if (strstr(buf, "/ld-musl-") != NULL) {
+            *libc_type = LIBC_TYPE_MUSL;
+        } else {
+            *libc_type = LIBC_TYPE_GNU;
+        }
         regfree(&reg);
         *p = '\0';
         return open_libc(fp_out, strchr(buf, '/'), makedev(dev_major, dev_minor), inode);
@@ -476,6 +487,10 @@ static int find_symbol_addr(size_t *addr, param_t *prm, const char *posix_name, 
     case DLFUNC_INTERNAL:
         st_name = find_strtab_offset(prm, internal_name);
         break;
+    }
+
+    if (addr == NULL) {
+        return st_name != 0 ? 0 : INJERR_NO_FUNCTION;
     }
 
     if (st_name != 0) {

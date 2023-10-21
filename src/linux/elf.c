@@ -312,7 +312,20 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr)
         *addr = saddr;
         regfree(&reg);
         *p = '\0';
-        return open_libc(fp_out, strchr(buf, '/'), makedev(dev_major, dev_minor), inode);
+
+        char *pathptr = strchr(buf, '/');
+
+        /* Fix for Flatpaks and other sandboxed apps. The path in `/proc/<pid>/maps` is relative
+           to what the process thinks is the rootfs. In the case of a sandboxed process, it can have
+           paths that don't exist in the filesystem. To access the "virtual" filesystem of the process,
+           you can access `/proc/<pid>/root`, which represents the rootfs of the process, including
+           "virtual" paths like `/app` for flatpaks. The `/proc/<pid>/root` path also exists in
+           regular processes. */
+
+        char newpath[sizeof(buf)];
+        snprintf(newpath, sizeof(newpath), "/proc/%d/root%s", pid, pathptr);
+        
+        return open_libc(fp_out, newpath, makedev(dev_major, dev_minor), inode);
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");

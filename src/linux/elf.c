@@ -57,6 +57,7 @@ typedef struct {
 
 static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_type_t *libc_type);
 static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino);
+static FILE *fopen_with_ino(const char *path, dev_t dev, ino_t ino);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
 static int read_elf_sym(FILE *fp, Elf_Sym *sym, size_t sym_size);
@@ -333,48 +334,59 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
 
 static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino)
 {
-    struct stat sbuf;
-    glob_t globbuf;
-    FILE *fp = fopen(path, "r");
+    FILE *fp = fopen_with_ino(path, dev, ino);
 
-    if (fp == NULL) {
-        const char *p = strstr(path, "/rootfs/"); /* under LXD */
-        if (p != NULL) {
-            fp = fopen(p + 7, "r");
-        }
-    }
     if (fp != NULL) {
-        if (fstat(fileno(fp), &sbuf) == 0 && sbuf.st_dev == dev && sbuf.st_ino == ino) {
-            // Found
-            *fp_out = fp;
-            return 0;
-        }
-        fclose(fp);
+        goto found;
     }
-    // Could not find the valid libc in the specified path.
 
-    // Search libc in base snaps. (https://snapcraft.io/docs/base-snaps)
+    /* workaround for LXD */
+    const char *p = strstr(path, "/rootfs/"); 
+    if (p != NULL) {
+        fp = fopen_with_ino(p + 7, dev, ino);
+        if (fp != NULL) {
+           goto found;
+        }
+    }
+
+    // workaround for Snap
+    //
+    // libc is in a base snap (https://snapcraft.io/docs/base-snaps),
+    glob_t globbuf;
     if (glob("/snap/core*/*", GLOB_NOSORT, NULL, &globbuf) == 0) {
         size_t idx;
         for (idx = 0; idx < globbuf.gl_pathc; idx++) {
             char buf[512];
             snprintf(buf, sizeof(buf), "%s%s", globbuf.gl_pathv[idx], path);
             buf[sizeof(buf) - 1] = '\0';
-            fp = fopen(buf, "r");
+            fp = fopen_with_ino(buf, dev, ino);
             if (fp != NULL) {
-                if (fstat(fileno(fp), &sbuf) == 0 && sbuf.st_dev == dev && sbuf.st_ino == ino) {
-                    // Found
-                    *fp_out = fp;
-                    globfree(&globbuf);
-                    return 0;
-                }
-                fclose(fp);
+                globfree(&globbuf);
+                goto found;
             }
         }
         globfree(&globbuf);
     }
     injector__set_errmsg("failed to open %s. (dev:0x%" PRIx64 ", ino:%lu)", path, dev, ino);
     return INJERR_NO_LIBRARY;
+found:
+    *fp_out = fp;
+    return 0;
+}
+
+static FILE *fopen_with_ino(const char *path, dev_t dev, ino_t ino)
+{
+    struct stat sbuf;
+    FILE *fp = fopen(path, "r");
+
+    if (fp == NULL) {
+        return NULL;
+    }
+    if (fstat(fileno(fp), &sbuf) != 0 || sbuf.st_dev != dev || sbuf.st_ino != ino) {
+        fclose(fp);
+        return NULL;
+    }
+    return fp;
 }
 
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)

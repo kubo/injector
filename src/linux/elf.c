@@ -31,6 +31,7 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include <unistd.h>
 #include "injector_internal.h"
 
@@ -56,7 +57,7 @@ typedef struct {
 } param_t;
 
 static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_type_t *libc_type);
-static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino);
+static int open_libc(FILE **fp_out, const char *path, pid_t pid, dev_t dev, ino_t ino);
 static FILE *fopen_with_ino(const char *path, dev_t dev, ino_t ino);
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr);
 static int read_elf_shdr(FILE *fp, Elf_Shdr *shdr, size_t shdr_size);
@@ -324,7 +325,7 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
         }
         regfree(&reg);
         *p = '\0';
-        return open_libc(fp_out, strchr(buf, '/'), makedev(dev_major, dev_minor), inode);
+        return open_libc(fp_out, strchr(buf, '/'), pid, makedev(dev_major, dev_minor), inode);
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");
@@ -332,7 +333,7 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
     return INJERR_NO_LIBRARY;
 }
 
-static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino)
+static int open_libc(FILE **fp_out, const char *path, pid_t pid, dev_t dev, ino_t ino)
 {
     FILE *fp = fopen_with_ino(path, dev, ino);
 
@@ -347,6 +348,18 @@ static int open_libc(FILE **fp_out, const char *path, dev_t dev, ino_t ino)
         if (fp != NULL) {
            goto found;
         }
+    }
+
+    // workaround for Flatpak (https://flatpak.org/)
+    //
+    // libc is under /proc/<PID>/root.
+    // The idea came from https://github.com/kubo/injector/pull/36.
+    char buf[PATH_MAX];
+    snprintf(buf, sizeof(buf), "/proc/%d/root%s", pid, path);
+    buf[sizeof(buf) - 1] = '\0';
+    fp = fopen_with_ino(buf, dev, ino);
+    if (fp != NULL) {
+        goto found;
     }
 
     // workaround for Snap

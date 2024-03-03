@@ -31,6 +31,7 @@
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <limits.h>
 #include <unistd.h>
 #include "injector_internal.h"
@@ -43,6 +44,16 @@
 #define Elf_Ehdr Elf32_Ehdr
 #define Elf_Shdr Elf32_Shdr
 #define Elf_Sym Elf32_Sym
+#endif
+
+// #define INJECTOR_DEBUG_ELF_C 1
+
+#ifdef INJECTOR_DEBUG_ELF_C
+#undef DEBUG
+#define DEBUG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#undef DEBUG
+#define DEBUG(...) do {} while(0)
 #endif
 
 typedef struct {
@@ -288,6 +299,7 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
         injector__set_errmsg("failed to open %s. (error: %s)", buf, strerror(errno));
         return INJERR_OTHER;
     }
+    DEBUG("Open %s\n", buf);
     /* /libc.so.6 or /libc-2.{DIGITS}.so or /ld-musl-{arch}.so.1 */
     if (regcomp(&reg, "/libc(\\.so\\.6|-2\\.[0-9]+\\.so)|/ld-musl-.+?\\.so\\.1", REG_EXTENDED) != 0) {
         injector__set_errmsg("regcomp failed!");
@@ -297,6 +309,7 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
         unsigned long saddr, eaddr;
         unsigned long long offset, inode;
         unsigned int dev_major, dev_minor;
+        DEBUG("   %s", buf);
         if (sscanf(buf, "%lx-%lx %*s %llx %x:%x %llu", &saddr, &eaddr, &offset, &dev_major, &dev_minor, &inode) != 6) {
             continue;
         }
@@ -325,7 +338,9 @@ static int search_and_open_libc(FILE **fp_out, pid_t pid, size_t *addr, libc_typ
         }
         regfree(&reg);
         *p = '\0';
-        return open_libc(fp_out, strchr(buf, '/'), pid, makedev(dev_major, dev_minor), inode);
+        p = strchr(buf, '/');
+        DEBUG(" libc in /proc/PID/maps: '%s'\n", p);
+        return open_libc(fp_out, p, pid, makedev(dev_major, dev_minor), inode);
     }
     fclose(fp);
     injector__set_errmsg("Could not find libc");
@@ -387,19 +402,58 @@ found:
     return 0;
 }
 
+static inline int is_on_overlay_fs(int fd)
+{
+    struct statfs sbuf;
+    if (fstatfs(fd, &sbuf) != 0) {
+        DEBUG(" fstatfs() error %s\n", strerror(errno));
+        return -1;
+    }
+#ifndef OVERLAYFS_SUPER_MAGIC
+#define OVERLAYFS_SUPER_MAGIC 0x794c7630
+#endif
+    return (sbuf.f_type == OVERLAYFS_SUPER_MAGIC) ? 1 : 0;
+}
+
 static FILE *fopen_with_ino(const char *path, dev_t dev, ino_t ino)
 {
+    DEBUG("   checking: '%s' ...", path);
     struct stat sbuf;
     FILE *fp = fopen(path, "r");
 
     if (fp == NULL) {
+        DEBUG(" fopen() error %s\n", strerror(errno));
         return NULL;
     }
-    if (fstat(fileno(fp), &sbuf) != 0 || sbuf.st_dev != dev || sbuf.st_ino != ino) {
-        fclose(fp);
-        return NULL;
+
+    if (fstat(fileno(fp), &sbuf) != 0) {
+        DEBUG(" fstat() error %s\n", strerror(errno));
+        goto cleanup;
     }
+    if (sbuf.st_ino != ino) {
+        DEBUG(" unexpected inode number: expected %llu but %llu\n",
+              (unsigned long long)ino, (unsigned long long)sbuf.st_ino);
+        goto cleanup;
+    }
+    if (sbuf.st_dev != dev) {
+        int rv = is_on_overlay_fs(fileno(fp));
+        if (rv < 0) {
+            goto cleanup;
+        }
+        if (rv != 1) {
+            DEBUG(" unexpected device number: expected %llu but %llu\n",
+                  (unsigned long long)dev, (unsigned long long)sbuf.st_dev);
+            goto cleanup;
+        }
+        DEBUG(" ignore device number mismatch (expected %llu but %llu) on overlay file system  ... ",
+              (unsigned long long)dev, (unsigned long long)sbuf.st_dev);
+    }
+
+    DEBUG(" OK\n");
     return fp;
+cleanup:
+    fclose(fp);
+    return NULL;
 }
 
 static int read_elf_ehdr(FILE *fp, Elf_Ehdr *ehdr)
